@@ -1,0 +1,32 @@
+{
+  "name": "the-ainn-game",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "ts-node src/main.ts",
+    "test": "ts-node src/test_gameloop.ts",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jesson-stylesheet/the-ainn-game.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/jesson-stylesheet/the-ainn-game/issues"
+  },
+  "homepage": "https://github.com/jesson-stylesheet/the-ainn-game#readme",
+  "devDependencies": {
+    "@types/node": "^25.3.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.98.0",
+    "dotenv": "^17.3.1"
+  }
+}
