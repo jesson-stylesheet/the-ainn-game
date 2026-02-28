@@ -11,7 +11,7 @@
  */
 
 import * as readline from 'readline';
-import { createPatron, createOneOfEach, getArchetypeNames } from '../../core/engine/patronFactory';
+import { createPatron } from '../../core/engine/patronFactory';
 import { parseQuestText, analyzeQuestVerbosity } from '../../core/engine/questFactory';
 import { gameState } from '../../core/engine/gameState';
 import { eventBus } from '../../core/engine/eventBus';
@@ -179,7 +179,20 @@ async function postQuest(rl: readline.Interface): Promise<void> {
     let quest: IQuest;
     if (useLLM) {
         console.log(`  ${C.dim}Sending to LLM...${C.reset}`);
-        quest = await parseQuestWithLLM(text);
+        try {
+            quest = await parseQuestWithLLM(text);
+        } catch (e) {
+            const errName = (e as Error).message;
+            if (errName.startsWith('LEGITIMACY_REJECTED:')) {
+                const reason = errName.replace('LEGITIMACY_REJECTED:', '');
+                console.log(`\n  ${C.red}✗ Quest Rejected!${C.reset}`);
+                console.log(`  ${C.yellow}Innkeeper:${C.reset} "${reason}"`);
+                return;
+            }
+            // If it's a different error, log it and return instead of falling back
+            console.log(`  ${C.red}LLM parsing failed: ${errName}${C.reset}`);
+            return;
+        }
     } else {
         quest = parseQuestText(text);
     }
@@ -690,19 +703,28 @@ async function tryPatronAutoQuest(patron: IPatron, force: boolean = false): Prom
 }
 
 async function summonPatron(rl: readline.Interface): Promise<void> {
-    const archetypes = getArchetypeNames();
-    console.log(`\n  ${C.bright}Archetypes:${C.reset}`);
-    for (let i = 0; i < archetypes.length; i++) {
-        console.log(`    ${C.cyan}${i + 1}${C.reset}. ${archetypes[i]}`);
+    const jobs = ['Warrior', 'Archer', 'Miner', 'Mechanic', 'Necromancer', 'Wizard', 'Berserker', 'Cleric', 'Geisha'];
+    console.log(`\n  ${C.bright}Summon Options:${C.reset}`);
+    for (let i = 0; i < jobs.length; i++) {
+        console.log(`    ${C.cyan}${i + 1}${C.reset}. Random Race + ${jobs[i]}`);
     }
-    console.log(`    ${C.cyan}0${C.reset}. Random`);
+    console.log(`    ${C.cyan}0${C.reset}. Fully Random (Race & Job via CSV Matrix)`);
 
-    const choiceStr = await askQuestion(rl, 'Choose archetype (add "q" to force quest, e.g. 1q): ');
+    const choiceStr = await askQuestion(rl, 'Choose option (add "q" to force quest, e.g. 1q): ');
     const forceQuest = choiceStr.toLowerCase().endsWith('q');
     const choice = parseInt(choiceStr);
 
-    const archetype = choice > 0 && choice <= archetypes.length ? archetypes[choice - 1] : undefined;
-    const patron = createPatron(archetype);
+    let patron: ReturnType<typeof createPatron>;
+    if (choice > 0 && choice <= jobs.length) {
+        // User picked a specific Job, race is still fully random.
+        // We need to parse the job string to the type expected by createPatron (lowercase)
+        const jobKey = jobs[choice - 1].toLowerCase() as any;
+        patron = createPatron(undefined, jobKey);
+    } else {
+        // Fully random
+        patron = createPatron();
+    }
+
     gameState.addPatron(patron);
 
     if (useDB) {
@@ -721,9 +743,9 @@ async function summonPatron(rl: readline.Interface): Promise<void> {
 }
 
 async function populateInn(): Promise<void> {
-    console.log(`\n  ${C.bright}Summoning one of each archetype...${C.reset}\n`);
-    const patrons = createOneOfEach();
-    for (const p of patrons) {
+    console.log(`\n  ${C.bright}Summoning 9 random patrons using CSV matrix...${C.reset}\n`);
+    for (let i = 0; i < 9; i++) {
+        const p = createPatron();
         gameState.addPatron(p);
         console.log(`  ${C.green}✓${C.reset} ${C.magenta}${p.name}${C.reset} (${p.archetype})`);
 
@@ -735,7 +757,7 @@ async function populateInn(): Promise<void> {
 
         await tryPatronAutoQuest(p);
     }
-    console.log(`\n  ${C.bright}${patrons.length} patrons now in the inn.${C.reset}`);
+    console.log(`\n  ${C.bright}9 patrons now in the inn.${C.reset}`);
 }
 
 function toggleModes(rl: readline.Interface): Promise<void> {

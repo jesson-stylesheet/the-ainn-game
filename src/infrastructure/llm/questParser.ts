@@ -30,6 +30,11 @@ export async function parseQuestWithLLM(text: string): Promise<IQuest> {
     try {
         const response = await parseQuestStructured(text);
 
+        // ── Legitimacy Check ───────────────────────────────────────────
+        if (response.isLegitimate === false) {
+            throw new Error(`LEGITIMACY_REJECTED:${response.rejectionReason}`);
+        }
+
         // Build the skill vector from structured response
         const vector = createEmptySkillVector();
         let validTagCount = 0;
@@ -46,8 +51,8 @@ export async function parseQuestWithLLM(text: string): Promise<IQuest> {
 
         // Fallback if LLM returned no valid tags
         if (validTagCount === 0) {
-            console.warn('⚠ LLM returned no valid tags, falling back to mock parser');
-            return mockParseQuestText(text);
+            console.warn('⚠ LLM returned no valid tags, rejecting quest');
+            throw new Error('LEGITIMACY_REJECTED:This text does not appear to describe a valid quest requiring any skills.');
         }
 
         // Validate quest type
@@ -113,8 +118,8 @@ export async function parseQuestWithLLM(text: string): Promise<IQuest> {
             ...(itemDetails ? { itemDetails } : {}),
         };
     } catch (error) {
-        console.warn(`⚠ LLM quest parsing failed, using mock:`, (error as Error).message);
-        return mockParseQuestText(text);
+        console.warn(`⚠ LLM quest parsing failed:`, (error as Error).message);
+        throw error;
     }
 }
 
