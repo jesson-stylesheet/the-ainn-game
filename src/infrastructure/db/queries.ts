@@ -7,7 +7,7 @@
  */
 
 import { supabase } from './supabaseClient';
-import type { IPatron, IQuest, QuestResolutionResult, SkillVector } from '../../core/types/entity';
+import type { IPatron, IQuest, QuestResolutionResult, SkillVector, IItem, ItemCategory, EquipmentSlot } from '../../core/types/entity';
 
 // ── Row Types (DB shape) ────────────────────────────────────────────────
 
@@ -39,6 +39,7 @@ interface QuestRow {
     tag_count: number;
     resolution_data: QuestResolutionResult | null;
     item_name: string | null;
+    item_category: string | null;
     item_quantity: number | null;
     item_rarity: number | null;
 }
@@ -51,6 +52,71 @@ interface LoreRow {
     patron_name: string | null;
     patron_archetype: string | null;
     narrative_seed: string | null;
+}
+
+interface ItemRow {
+    id: string;
+    name: string;
+    category: string;
+    rarity: number;
+    quantity: number;
+    owner_patron_id: string | null;
+    equipped_slot: string | null;
+}
+
+// ── Item Queries ────────────────────────────────────────────────────────
+
+export async function insertItem(item: IItem): Promise<void> {
+    const { error } = await supabase.from('items').insert({
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        rarity: item.rarity,
+        quantity: item.quantity,
+        owner_patron_id: item.ownerPatronId ?? null,
+        equipped_slot: item.equippedSlot ?? null,
+    });
+    if (error) throw new Error(`Failed to insert item: ${error.message}`);
+}
+
+export async function fetchAllItems(): Promise<IItem[]> {
+    const { data, error } = await supabase.from('items').select('*');
+    if (error) throw new Error(`Failed to fetch items: ${error.message}`);
+    return (data as ItemRow[]).map(rowToItem);
+}
+
+export async function updateItemLocation(
+    id: string,
+    ownerPatronId: string | null,
+    equippedSlot: EquipmentSlot | null,
+    quantity?: number
+): Promise<void> {
+    const updates: any = {
+        owner_patron_id: ownerPatronId,
+        equipped_slot: equippedSlot,
+    };
+    if (quantity !== undefined) {
+        updates.quantity = quantity;
+    }
+    const { error } = await supabase.from('items').update(updates).eq('id', id);
+    if (error) throw new Error(`Failed to update item location: ${error.message}`);
+}
+
+export async function deleteItem(id: string): Promise<void> {
+    const { error } = await supabase.from('items').delete().eq('id', id);
+    if (error) throw new Error(`Failed to delete item: ${error.message}`);
+}
+
+function rowToItem(row: ItemRow): IItem {
+    return {
+        id: row.id,
+        name: row.name,
+        category: row.category as ItemCategory,
+        rarity: row.rarity,
+        quantity: row.quantity,
+        ownerPatronId: row.owner_patron_id,
+        equippedSlot: row.equipped_slot as EquipmentSlot | null,
+    };
 }
 
 // ── Patron Queries ──────────────────────────────────────────────────────
@@ -98,6 +164,15 @@ function rowToPatron(row: PatronRow): IPatron {
         arrivalTimestamp: row.arrival_timestamp,
         memoryIds: row.memory_ids,
         eventIds: row.event_ids,
+        equipment: {
+            headwear: null,
+            bodyArmor: null,
+            legwear: null,
+            footwear: null,
+            righthand: null,
+            lefthand: null,
+        },
+        inventory: [],
     };
 }
 
@@ -118,6 +193,7 @@ export async function insertQuest(quest: IQuest, verbosityScore?: number): Promi
         verbosity_score: verbosityScore ?? 0,
         tag_count: tagCount,
         item_name: quest.itemDetails?.itemName ?? null,
+        item_category: quest.itemDetails?.category ?? null,
         item_quantity: quest.itemDetails?.quantity ?? null,
         item_rarity: quest.itemDetails?.rarity ?? null,
     });
@@ -177,9 +253,10 @@ function rowToQuest(row: QuestRow): IQuest {
         status: row.status as IQuest['status'],
         deadlineTimestamp: row.deadline_timestamp,
     };
-    if (row.item_name) {
+    if (row.item_name && row.item_category) {
         quest.itemDetails = {
             itemName: row.item_name,
+            category: row.item_category as ItemCategory,
             quantity: row.item_quantity ?? 1,
             rarity: row.item_rarity ?? 0,
         };
@@ -190,9 +267,9 @@ function rowToQuest(row: QuestRow): IQuest {
 // ── Lore Chronicle Queries ──────────────────────────────────────────────
 
 export async function insertLoreEntry(entry: {
-    questId: string;
+    questId: string | null;
     originalText: string;
-    outcome?: 'COMPLETED' | 'FAILED';
+    outcome?: 'COMPLETED' | 'FAILED' | 'SYNTHESIS';
     patronName?: string;
     patronArchetype?: string;
     narrativeSeed?: string;

@@ -12,17 +12,18 @@ import type { IQuest, QuestResolutionResult, IPatron } from '../types/entity';
 
 export interface LoreEntry {
     timestamp: number;
-    questId: string;
-    originalText: string;             // The player's raw quest narrative
-    outcome: 'COMPLETED' | 'FAILED';  // Always set (lore written at resolution)
-    patronName: string;               // Who attempted it
-    patronArchetype: string;          // What they were
-    loreText: string;                 // LLM-generated chronicle entry
-    storyText: string;                // LLM-generated short story for the player
+    questId: string | null;
+    originalText: string;             // The player's raw quest narrative or the synthesis questions
+    outcome: 'COMPLETED' | 'FAILED' | 'SYNTHESIS';
+    patronName: string | null;               // Who attempted it (null for synthesis)
+    patronArchetype: string | null;          // What they were (null for synthesis)
+    loreText: string;                 // LLM-generated chronicle entry or synthesis
+    storyText: string;                // LLM-generated short story for the player or Guardian dialogue
 }
 
 class LoreChronicle {
     private entries: LoreEntry[] = [];
+    private unacknowledgedCount = 0;
 
     /**
      * Record a completed quest resolution with LLM-generated lore and story.
@@ -45,6 +46,47 @@ class LoreChronicle {
             loreText,
             storyText,
         });
+        this.unacknowledgedCount++;
+    }
+
+    /**
+     * Record a Guardian's synthesis entry.
+     */
+    recordSynthesis(synthesisText: string, questionsAndAnswersText: string = ''): void {
+        this.entries.push({
+            timestamp: Date.now(),
+            questId: null,
+            originalText: questionsAndAnswersText,
+            outcome: 'SYNTHESIS',
+            patronName: 'The Chronicle Guardian',
+            patronArchetype: 'Celestial Observer',
+            loreText: synthesisText,
+            storyText: 'The Guardian weaves the threads of fate.',
+        });
+        // Note: We don't increment the unacknowledged count here, as a synthesis doesn't trigger another synthesis.
+    }
+
+    /** 
+     * How many normal lore entries have been added since the last Guardian visit? 
+     */
+    get unacknowledgedEntriesCount(): number {
+        return this.unacknowledgedCount;
+    }
+
+    /**
+     * Reset the unacknowledged counter after a Guardian visit.
+     */
+    acknowledgeEntries(): void {
+        this.unacknowledgedCount = 0;
+    }
+
+    /**
+     * Get the lore texts that haven't been synthesized yet.
+     */
+    getUnacknowledgedLoreContext(): string {
+        if (this.unacknowledgedCount === 0) return 'No new tales have been spun since the last visit.';
+        const recent = this.entries.slice(-this.unacknowledgedCount);
+        return recent.map(e => e.loreText).join('\n');
     }
 
     /**
@@ -69,6 +111,9 @@ class LoreChronicle {
         if (this.entries.length === 0) return 'The inn has been quiet. No tales to tell.';
 
         const lines = this.entries.map(entry => {
+            if (entry.outcome === 'SYNTHESIS') {
+                return `\n${'-'.repeat(40)}\n📜 SYNTHESIS RECORD: ${entry.loreText}\n${'-'.repeat(40)}\n`;
+            }
             const icon = entry.outcome === 'COMPLETED' ? '✦' : '✧';
             return `${icon} ${entry.loreText}`;
         });
@@ -85,6 +130,19 @@ class LoreChronicle {
         return recent.map(e => e.loreText).join('\n');
     }
 
+    /**
+     * Get the most recent synthesis entry's lore text, if any.
+     * Used to give the Guardian memory of its prior visit.
+     */
+    getLastSynthesis(): string | null {
+        for (let i = this.entries.length - 1; i >= 0; i--) {
+            if (this.entries[i].outcome === 'SYNTHESIS') {
+                return this.entries[i].loreText;
+            }
+        }
+        return null;
+    }
+
     /** Total entries. */
     get size(): number {
         return this.entries.length;
@@ -93,6 +151,7 @@ class LoreChronicle {
     /** Reset for testing. */
     reset(): void {
         this.entries = [];
+        this.unacknowledgedCount = 0;
     }
 }
 

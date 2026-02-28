@@ -6,7 +6,7 @@
  * Used to type the parsed LLM responses throughout the engine.
  */
 
-import type { PatronHealthStatus } from '../../../core/types/entity';
+import type { PatronHealthStatus, ItemCategory } from '../../../core/types/entity';
 
 // ── Quest Resolution ────────────────────────────────────────────────────
 
@@ -26,6 +26,7 @@ export interface QuestParseResult {
     resolutionTicks: number;
     itemDetails: {
         itemName: string;
+        category: ItemCategory;
         quantity: number;
         rarity: number;
     } | null;
@@ -38,4 +39,11 @@ export interface ItemDedupResult {
     isMatch: boolean;
     canonicalName: string;
     reasoning: string;
+}
+
+// ── Lore Chronicle Guardian ─────────────────────────────────────────────
+
+export interface GuardianQuestionResult {
+    dialogue: string;
+    questions: string[];
 }

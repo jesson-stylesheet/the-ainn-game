@@ -66,17 +66,18 @@ export async function parseQuestWithLLM(text: string): Promise<IQuest> {
             const rarity = Math.max(0, Math.min(100, response.itemDetails.rarity ?? 0));
             const quantity = Math.max(1, Math.round(response.itemDetails.quantity ?? 1));
             let itemName = response.itemDetails.itemName || 'unknown item';
+            const category = response.itemDetails.category || 'questItem';
 
             // ── Item Deduplication ──────────────────────────────────────
             // Check existing inventory for semantic duplicates
-            const existingItems = gameState.getInventory().map(i => i.name);
+            const existingItems = gameState.getInnInventory().map(i => i.name);
             const dedup = await deduplicateItemName(itemName, existingItems);
             if (dedup.wasDeduped) {
                 console.log(`  🔗 Dedup: "${itemName}" → "${dedup.canonicalName}" (${dedup.reasoning})`);
             }
             itemName = dedup.canonicalName;
 
-            itemDetails = { itemName, quantity, rarity };
+            itemDetails = { itemName, category, quantity, rarity };
 
             // Rarity-scaled difficulty boost (the LLM should already do this,
             // but we enforce a mathematical floor as safety net)

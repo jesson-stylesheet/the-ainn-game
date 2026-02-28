@@ -12,6 +12,7 @@ import {
     type IPatron,
     type ArchetypeBlueprint,
     createEmptySkillVector,
+    createEmptyEquipment,
 } from '../types/entity';
 import { MIN_STAT, MAX_STAT, STAT_VARIANCE } from '../constants';
 import { generateUUID, rollInt, clamp } from './utils';
@@ -159,6 +160,8 @@ export function createPatron(archetypeName?: string): IPatron {
         state: 'IDLE',
         healthStatus: 'HEALTHY',
         arrivalTimestamp: Date.now(),
+        equipment: createEmptyEquipment(),
+        inventory: [],
     };
 }
 

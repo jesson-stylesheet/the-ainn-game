@@ -6,14 +6,15 @@
  * syncs to Supabase. For testing, it IS the source of truth.
  */
 
-import type { IPatron, IQuest, QuestResolutionResult, PatronState } from '../types/entity';
+import type { IPatron, IQuest, QuestResolutionResult, PatronState, IItem, EquipmentSlot } from '../types/entity';
 import { eventBus } from './eventBus';
+import { generateUUID } from './utils';
 
 class GameState {
     private patrons: Map<string, IPatron> = new Map();
     private quests: Map<string, IQuest> = new Map();
     private resolvedResults: QuestResolutionResult[] = [];
-    private innInventory: Map<string, { quantity: number; rarity: number }> = new Map();
+    private items: Map<string, IItem> = new Map();
 
     // ── Patrons ─────────────────────────────────────────────────────────
 
@@ -110,14 +111,16 @@ class GameState {
 
             // Deposit extracted items into the Inn's ledger on success
             if (result.success && quest.type === 'itemRetrieval' && quest.itemDetails) {
-                const { itemName, quantity, rarity } = quest.itemDetails;
-                // Normalize name for grouping (e.g., 'Silverleaf' and 'silverleaf' become same stack)
-                const key = itemName.trim().toLowerCase();
-                const existing = this.innInventory.get(key) ?? { quantity: 0, rarity };
-                this.innInventory.set(key, {
-                    quantity: existing.quantity + quantity,
-                    rarity: existing.rarity >= rarity ? existing.rarity : rarity // keep highest discovered rarity
-                });
+                const newItem: IItem = {
+                    id: generateUUID(),
+                    name: quest.itemDetails.itemName,
+                    category: quest.itemDetails.category,
+                    rarity: quest.itemDetails.rarity,
+                    quantity: quest.itemDetails.quantity,
+                    ownerPatronId: null, // Goes straight to the Inn
+                    equippedSlot: null
+                };
+                this.addItem(newItem);
             }
         }
 
@@ -129,6 +132,9 @@ class GameState {
 
         if (quest && patron) {
             eventBus.emit('quest:resolved', { result, patron, quest });
+            // Check if we hit the threshold for the Lore Guardian
+            import('./loreGuardian').then(({ loreGuardian }) => loreGuardian.checkArrivalCondition())
+                .catch(err => console.warn('⚠ Lore Guardian check failed:', (err as Error).message));
         }
     }
 
@@ -136,15 +142,77 @@ class GameState {
         return [...this.resolvedResults];
     }
 
-    // ── Inventory ───────────────────────────────────────────────────────
+    // ── Items & Inventory ───────────────────────────────────────────────
 
-    /** Returns the inn's current item ledger as an array. */
-    getInventory(): Array<{ name: string; quantity: number; rarity: number }> {
-        return Array.from(this.innInventory.entries()).map(([name, data]) => ({
-            name,
-            quantity: data.quantity,
-            rarity: data.rarity
-        }));
+    addItem(item: IItem): void {
+        this.items.set(item.id, item);
+
+        // If it belongs to a patron, sync their reference
+        if (item.ownerPatronId) {
+            const patron = this.patrons.get(item.ownerPatronId);
+            if (patron) {
+                if (item.equippedSlot) {
+                    patron.equipment[item.equippedSlot] = item;
+                } else {
+                    patron.inventory.push(item);
+                }
+            }
+        }
+    }
+
+    getItem(id: string): IItem | undefined {
+        return this.items.get(id);
+    }
+
+    getAllItems(): IItem[] {
+        return Array.from(this.items.values());
+    }
+
+    /** Returns the inn's own inventory (unassigned items). */
+    getInnInventory(): IItem[] {
+        return Array.from(this.items.values()).filter(i => !i.ownerPatronId);
+    }
+
+    /** Move an item from the inn to a patron's equipment slot. */
+    equipItem(patronId: string, itemId: string, slot: EquipmentSlot): boolean {
+        const item = this.items.get(itemId);
+        const patron = this.patrons.get(patronId);
+
+        if (!item || !patron) return false;
+
+        // Ensure item isn't already equipped or owned by someone else
+        if (item.ownerPatronId && item.ownerPatronId !== patronId) return false;
+
+        // If something is already there, unequip it first
+        if (patron.equipment[slot]) {
+            this.unequipItem(patronId, slot);
+        }
+
+        // Remove from patron's inventory array if it was there
+        if (item.ownerPatronId === patronId && !item.equippedSlot) {
+            patron.inventory = patron.inventory.filter(i => i.id !== itemId);
+        }
+
+        item.ownerPatronId = patronId;
+        item.equippedSlot = slot;
+        patron.equipment[slot] = item;
+
+        return true;
+    }
+
+    /** Unequip an item and return it to the Inn's inventory. */
+    unequipItem(patronId: string, slot: EquipmentSlot): boolean {
+        const patron = this.patrons.get(patronId);
+        if (!patron) return false;
+
+        const item = patron.equipment[slot];
+        if (!item) return false;
+
+        item.ownerPatronId = null;
+        item.equippedSlot = null;
+        patron.equipment[slot] = null;
+
+        return true;
     }
 
     // ── Stats ───────────────────────────────────────────────────────────
@@ -178,7 +246,7 @@ class GameState {
         this.patrons.clear();
         this.quests.clear();
         this.resolvedResults = [];
-        this.innInventory.clear();
+        this.items.clear();
     }
 }
 

@@ -91,10 +91,15 @@ export const QUEST_PARSE_SCHEMA = {
                 description: 'ONLY populated if questType is itemRetrieval. Otherwise null.',
                 properties: {
                     itemName: { type: 'string', description: 'The specific name of the item being retrieved.' },
+                    category: {
+                        type: 'string',
+                        description: 'What category does this item fall into?',
+                        enum: ['questItem', 'consumables', 'meleeWeapon', 'magicWeapon', 'rangeWeapon', 'shield', 'lightHeadGear', 'heavyHeadGear', 'lightBodyArmor', 'heavyBodyArmor', 'lightLegGear', 'heavyLegGear', 'lightFootGear', 'heavyFootGear']
+                    },
                     quantity: { type: 'number', description: 'The integer amount requested.' },
                     rarity: { type: 'number', description: 'A float from 0.00 (abundant/common dirt) to 100.00 (unique, legendary artifact).' }
                 },
-                required: ['itemName', 'quantity', 'rarity'],
+                required: ['itemName', 'category', 'quantity', 'rarity'],
                 additionalProperties: false,
             },
             reasoning: {
@@ -129,6 +134,31 @@ export const ITEM_DEDUP_SCHEMA = {
             },
         },
         required: ['isMatch', 'canonicalName', 'reasoning'],
+        additionalProperties: false,
+    },
+};
+
+// ── Lore Chronicle Guardian Schema ──────────────────────────────────────
+
+export const GUARDIAN_QUESTION_SCHEMA = {
+    name: 'guardian_questions',
+    strict: true,
+    schema: {
+        type: 'object',
+        properties: {
+            dialogue: {
+                type: 'string',
+                description: 'The Guardian\'s greeting and initial observation of the recent lore.',
+            },
+            questions: {
+                type: 'array',
+                description: 'Exactly 3 questions for the Innkeeper to connect the lore threads.',
+                items: { type: 'string' },
+                minItems: 3,
+                maxItems: 3,
+            },
+        },
+        required: ['dialogue', 'questions'],
         additionalProperties: false,
     },
 };

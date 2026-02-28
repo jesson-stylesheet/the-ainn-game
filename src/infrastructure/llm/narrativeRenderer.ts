@@ -8,14 +8,15 @@
 
 import { chatCompletionStructured, chatCompletion } from './openRouterClient';
 import type { IPatron, IQuest, QuestResolutionResult, PatronHealthStatus } from '../../core/types/entity';
+import { loreChronicle } from '../../core/engine/loreChronicle';
 
 // ── Centralized imports ────────────────────────────────────────────────
-import { RESOLUTION_SYSTEM_PROMPT, QUEST_PARSER_SYSTEM_PROMPT, ARRIVAL_SYSTEM_PROMPT, ITEM_DEDUP_SYSTEM_PROMPT, PATRON_QUEST_GEN_SYSTEM_PROMPT } from './prompts/systemPrompts';
-import { RESOLUTION_SCHEMA, QUEST_PARSE_SCHEMA, ITEM_DEDUP_SCHEMA } from './schemas/jsonSchemas';
-import type { ResolutionNarrative, QuestParseResult, ItemDedupResult } from './schemas/responseTypes';
+import { RESOLUTION_SYSTEM_PROMPT, QUEST_PARSER_SYSTEM_PROMPT, ARRIVAL_SYSTEM_PROMPT, ITEM_DEDUP_SYSTEM_PROMPT, PATRON_QUEST_GEN_SYSTEM_PROMPT, GUARDIAN_QUESTION_PROMPT, GUARDIAN_SYNTHESIS_PROMPT } from './prompts/systemPrompts';
+import { RESOLUTION_SCHEMA, QUEST_PARSE_SCHEMA, ITEM_DEDUP_SCHEMA, GUARDIAN_QUESTION_SCHEMA } from './schemas/jsonSchemas';
+import type { ResolutionNarrative, QuestParseResult, ItemDedupResult, GuardianQuestionResult } from './schemas/responseTypes';
 
 // Re-export types so consumers don't need to change their imports
-export type { ResolutionNarrative, QuestParseResult, ItemDedupResult };
+export type { ResolutionNarrative, QuestParseResult, ItemDedupResult, GuardianQuestionResult };
 
 // ── Quest Resolution Narrative ──────────────────────────────────────────
 
@@ -176,6 +177,69 @@ export async function renderArrivalNarrative(patron: IPatron): Promise<string> {
         );
     } catch {
         return `${patron.name} the ${patron.archetype} pushes through the door and surveys the room.`;
+    }
+}
+
+// ── Lore Chronicle Guardian ─────────────────────────────────────────────
+
+/**
+ * Have the Guardian analyze recent lore and generate 3 questions.
+ */
+export async function generateGuardianQuestions(recentLore: string): Promise<GuardianQuestionResult> {
+    const defaultResponse: GuardianQuestionResult = {
+        dialogue: "The winds of fate shift. Speak to me.",
+        questions: ["What do you make of the recent whispers?", "Have you noticed any strange patterns?", "Where do these threads lead next?"]
+    };
+
+    if (!recentLore || recentLore.trim() === '') {
+        return defaultResponse;
+    }
+
+    try {
+        return await chatCompletionStructured<GuardianQuestionResult>(
+            [
+                { role: 'system', content: GUARDIAN_QUESTION_PROMPT },
+                { role: 'user', content: `RECENT LORE:\n\n${recentLore}` },
+            ],
+            GUARDIAN_QUESTION_SCHEMA,
+            { temperature: 0.8, maxTokens: 400 } // Slight bump in temp for creativity
+        );
+    } catch (error) {
+        console.warn(`⚠ Guardian questions failed, using fallback:`, (error as Error).message);
+        return defaultResponse;
+    }
+}
+
+/**
+ * Have the Guardian synthesize a new lore entry based on the player's answers.
+ */
+export async function synthesizeLore(recentLore: string, questions: string[], answers: string[]): Promise<string> {
+    const fallbackText = "The Guardian nods slowly. 'The threads weave together.' They disappear into the ether.";
+
+    if (questions.length !== answers.length) {
+        console.warn(`⚠ synthesizeLore: mismatched questions/answers length`);
+    }
+
+    const qnaPairs = questions.map((q, i) => `Q: ${q}\nA (Innkeeper): ${answers[i] || 'Silence.'}`).join('\n\n');
+
+    const priorSynthesis = loreChronicle.getLastSynthesis();
+    const priorContext = priorSynthesis
+        ? `\n\nPRIOR GUARDIAN SYNTHESIS (build upon this):\n${priorSynthesis}`
+        : '';
+
+    const prompt = `RECENT LORE:\n${recentLore}\n\nGUARDIAN'S QUESTIONS & INNKEEPER'S ANSWERS:\n${qnaPairs}${priorContext}`;
+
+    try {
+        return await chatCompletion(
+            [
+                { role: 'system', content: GUARDIAN_SYNTHESIS_PROMPT },
+                { role: 'user', content: prompt },
+            ],
+            { temperature: 0.9, maxTokens: 500 }
+        );
+    } catch (error) {
+        console.warn(`⚠ Guardian synthesis failed, using fallback:`, (error as Error).message);
+        return fallbackText;
     }
 }
 

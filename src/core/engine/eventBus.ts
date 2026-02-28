@@ -20,6 +20,7 @@ export interface GameEvents {
     'tick': { simulatedTime: number; tickCount: number };
     'engine:started': { startTime: number };
     'engine:stopped': { stopTime: number };
+    'lore:guardian_arrived': { recentLore: string };
 }
 
 export type GameEventName = keyof GameEvents;

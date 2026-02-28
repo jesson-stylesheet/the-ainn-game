@@ -44,6 +44,42 @@ export type PatronState = 'IDLE' | 'LOUNGING' | 'ON_QUEST' | 'DEPARTED' | 'DEAD'
 
 export type PatronHealthStatus = 'HEALTHY' | 'INJURED' | 'DEAD';
 
+// ── Equipment & Items ───────────────────────────────────────────────────
+
+export type ItemCategory =
+    | 'questItem' | 'consumables' | 'meleeWeapon' | 'magicWeapon'
+    | 'rangeWeapon' | 'shield' | 'lightHeadGear' | 'heavyHeadGear'
+    | 'lightBodyArmor' | 'heavyBodyArmor' | 'lightLegGear' | 'heavyLegGear'
+    | 'lightFootGear' | 'heavyFootGear';
+
+export type EquipmentSlot =
+    | 'headwear' | 'bodyArmor' | 'legwear' | 'footwear'
+    | 'righthand' | 'lefthand';
+
+export interface IItem {
+    id: string;              // UUID
+    name: string;
+    category: ItemCategory;
+    rarity: number;          // 0.00 to 100.00
+    quantity: number;
+    ownerPatronId?: string | null;  // If owned by a patron
+    equippedSlot?: EquipmentSlot | null; // If worn by the patron
+}
+
+export type PatronEquipment = Record<EquipmentSlot, IItem | null>;
+
+/** Creates an empty equipment record for a new patron. */
+export function createEmptyEquipment(): PatronEquipment {
+    return {
+        headwear: null,
+        bodyArmor: null,
+        legwear: null,
+        footwear: null,
+        righthand: null,
+        lefthand: null,
+    };
+}
+
 // ── IPatron ─────────────────────────────────────────────────────────────
 
 export interface IPatron {
@@ -54,6 +90,9 @@ export interface IPatron {
     state: PatronState;
     healthStatus: PatronHealthStatus; // HEALTHY, INJURED, or DEAD
     arrivalTimestamp: number;     // Unix epoch (ms)
+
+    equipment: PatronEquipment;   // Items currently worn/wielded
+    inventory: IItem[];           // Items held but not equipped
 
     // Future expansion slots (see Blueprint §9.2 — Vectorized Grudges)
     memoryIds?: string[];
@@ -80,6 +119,7 @@ export interface IQuest {
     // Valid only if QuestType is 'itemRetrieval'
     itemDetails?: {
         itemName: string;
+        category: ItemCategory;
         quantity: number;
         rarity: number;           // 0.00 (common) to 100.00 (unique)
     };

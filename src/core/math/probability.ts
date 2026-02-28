@@ -19,6 +19,8 @@ import {
     type IQuest,
     type QuestResolutionResult,
     ALL_SKILL_TAGS,
+    ItemCategory,
+    IItem,
 } from '../types/entity';
 import { GAMMA } from '../constants';
 import { rollD20 } from '../engine/utils';
@@ -56,6 +58,62 @@ export function computeDotProduct(patronSkills: SkillVector, questReqs: SkillVec
         }
     }
     return sum;
+}
+
+// ── Equipment Synergy ───────────────────────────────────────────────────
+
+/**
+ * Computes the bonus score provided by the patron's currently equipped items.
+ * Items provide a synergy bonus (rarity / 10) if the quest demands skills
+ * loosely related to the equipment's category. Otherwise, combat gear provides
+ * a minor flat bonus (rarity / 25) strictly for subjugation quests.
+ */
+export function computeEquipmentBonus(patron: IPatron, quest: IQuest): number {
+    let bonus = 0;
+
+    const synergyMap: Record<ItemCategory, SkillTag[]> = {
+        meleeWeapon: ['MeleeWeapon', 'Bravery'],
+        magicWeapon: ['BasicMagic', 'DarkMagic', 'HolyMagic'],
+        rangeWeapon: ['LongRangeWeapon', 'Agility'],
+        shield: ['Defense', 'Constitution'],
+        lightHeadGear: ['Agility', 'Navigation'],
+        lightBodyArmor: ['Agility', 'Navigation'],
+        lightLegGear: ['Agility', 'Navigation'],
+        lightFootGear: ['Agility', 'Navigation'],
+        heavyHeadGear: ['Defense', 'Constitution'],
+        heavyBodyArmor: ['Defense', 'Constitution'],
+        heavyLegGear: ['Defense', 'Constitution'],
+        heavyFootGear: ['Defense', 'Constitution'],
+        questItem: [],
+        consumables: [],
+    };
+
+    const isCombat = quest.type === 'subjugation';
+
+    // Loop through equipped items
+    for (const slot of Object.values(patron.equipment)) {
+        if (!slot) continue;
+
+        const item: IItem = slot;
+        const mappedSkills = synergyMap[item.category] || [];
+
+        let hasSynergy = false;
+        for (const skill of mappedSkills) {
+            if (quest.requirements[skill] > 0) {
+                hasSynergy = true;
+                break;
+            }
+        }
+
+        if (hasSynergy) {
+            bonus += item.rarity / 10;
+        } else if (isCombat && mappedSkills.length > 0) {
+            // Apply flat bonus if it's armor/weapon during combat, with no specific synergy
+            bonus += item.rarity / 25;
+        }
+    }
+
+    return bonus;
 }
 
 // ── Weakness Extraction ─────────────────────────────────────────────────
@@ -103,7 +161,12 @@ export function extractWeakestTags(
  * When S << D, near certain failure.
  */
 export function resolveQuest(patron: IPatron, quest: IQuest): QuestResolutionResult {
-    const coverageScore = computeCoverageScore(patron.skills, quest.requirements);
+    let coverageScore = computeCoverageScore(patron.skills, quest.requirements);
+    const equipmentBonus = computeEquipmentBonus(patron, quest);
+
+    // Add equipment bonus to the coverage score before sigmoid
+    coverageScore += equipmentBonus;
+
     const d20 = rollD20();
     const D = quest.difficultyScalar;
 

@@ -22,7 +22,8 @@ import type { SkillTag, IPatron, IQuest, QuestResolutionResult } from '../../cor
 import { ALL_SKILL_TAGS } from '../../core/types/entity';
 import * as db from '../../infrastructure/db/queries';
 import { parseQuestWithLLM } from '../../infrastructure/llm/questParser';
-import { renderResolution, renderArrivalNarrative, generatePatronQuest } from '../../infrastructure/llm/narrativeRenderer';
+import { renderResolution, renderArrivalNarrative, generatePatronQuest, generateGuardianQuestions, synthesizeLore } from '../../infrastructure/llm/narrativeRenderer';
+import { loreGuardian, GUARDIAN_THRESHOLD } from '../../core/engine/loreGuardian';
 
 // ── Colors ──────────────────────────────────────────────────────────────
 
@@ -37,6 +38,7 @@ const C = {
 
 let useLLM = true;        // Toggle LLM quest parsing (default: on)
 let useDB = false;        // Toggle Supabase persistence (default: in-memory)
+let isGuardianActive = false; // Prevent overlapping triggers
 
 // ── Display Helpers ─────────────────────────────────────────────────────
 
@@ -71,7 +73,8 @@ function showMenu(): void {
     console.log(`    ${C.cyan}2${C.reset} View Patrons          ${C.cyan}7${C.reset} View Inn Ledger`);
     console.log(`    ${C.cyan}3${C.reset} View Quest Board      ${C.cyan}8${C.reset} Summon New Patron`);
     console.log(`    ${C.cyan}4${C.reset} Assign Patron         ${C.cyan}9${C.reset} Toggle LLM/DB`);
-    console.log(`    ${C.cyan}5${C.reset} Resolve All Quests    ${C.cyan}I${C.reset} Populate Inn (All 9) / ${C.cyan}0${C.reset} Exit`);
+    console.log(`    ${C.cyan}5${C.reset} Resolve All Quests    ${C.cyan}G${C.reset} Summon Lore Guardian (${loreChronicle.unacknowledgedEntriesCount}/${GUARDIAN_THRESHOLD})`);
+    console.log(`    ${C.cyan}I${C.reset} Populate Inn (All 9) / ${C.cyan}0${C.reset} Exit`);
     console.log('');
 }
 
@@ -414,7 +417,7 @@ function viewLore(): void {
 }
 
 function viewLedger(): void {
-    const inv = gameState.getInventory();
+    const inv = gameState.getInnInventory();
     console.log(`\n  ${C.bright}💰 Inn Ledger & Stash${C.reset}\n`);
     if (inv.length === 0) {
         console.log(`  ${C.dim}The cellar is empty. Complete 'itemRetrieval' quests to gather resources.${C.reset}`);
@@ -433,18 +436,78 @@ function viewLedger(): void {
     }
 }
 
+// ── Lore Guardian Coordinator ───────────────────────────────────────────
+
+async function handleGuardianVisit(rl: readline.Interface, recentLore: string): Promise<void> {
+    if (isGuardianActive) return;
+    isGuardianActive = true;
+
+    try {
+        console.log(`\n  ${C.bright}${C.magenta}✧ ══ THE GUARDIAN OF CHRONICLES HAS ARRIVED ══ ✧${C.reset}`);
+        console.log(`  ${C.dim}The air grows still. A celestial figure pores over your recent records...${C.reset}\n`);
+
+        const result = await generateGuardianQuestions(recentLore);
+
+        console.log(`  ${C.magenta}Guardian:${C.reset} "${result.dialogue}"\n`);
+
+        const answers: string[] = [];
+        for (let i = 0; i < result.questions.length; i++) {
+            const q = result.questions[i];
+            console.log(`  ${C.bright}Question ${i + 1}:${C.reset} ${q}`);
+            const answer = await askQuestion(rl, 'Your answer (or leave blank to stay silent): ');
+            answers.push(answer);
+            console.log('');
+        }
+
+        console.log(`  ${C.dim}The Guardian nods slowly, their pen weaving light into the parchment...${C.reset}\n`);
+
+        const synthesis = await synthesizeLore(recentLore, result.questions, answers);
+        const qAndAText = result.questions.map((q, i) => `Q: ${q}\nA: ${answers[i] || '[Silence]'}`).join('\n\n');
+
+        loreGuardian.finalizeVisit(synthesis, qAndAText);
+
+        console.log(`  ${C.bright}${C.yellow}📜 NEW CHRONICLE SYNTHESIS 📜${C.reset}\n`);
+        const wrapped = wordWrap(synthesis, 75);
+        wrapped.forEach(line => console.log(`  ${line}`));
+        console.log(`\n  ${C.magenta}✧ ════════════════════════════════════════════ ✧${C.reset}\n`);
+
+        if (useDB) {
+            try {
+                await db.insertLoreEntry({
+                    questId: null,
+                    originalText: qAndAText,
+                    outcome: 'SYNTHESIS',
+                    patronName: 'The Chronicle Guardian',
+                    patronArchetype: 'Celestial Observer',
+                    narrativeSeed: synthesis,
+                });
+            } catch (e) {
+                console.log(`  ${C.red}DB sync failed for Guardian synthesis: ${(e as Error).message}${C.reset}`);
+            }
+        }
+    } catch (error) {
+        console.log(`\n  ${C.red}⚠ Guardian visit failed: ${(error as Error).message}${C.reset}`);
+        console.log(`  ${C.dim}The Guardian fades into the mist. Perhaps they will return...${C.reset}\n`);
+    } finally {
+        isGuardianActive = false;
+    }
+}
+
 // ── Patron Auto-Quest ───────────────────────────────────────────────────
 
 /**
  * When lore > 10 entries and a 50% coin flip succeeds, the arriving
  * patron generates and posts their own quest using the LLM.
+ * Can be run manually by enabling the `force` flag.
  */
-async function tryPatronAutoQuest(patron: IPatron): Promise<void> {
-    // Guard: need enough world history for meaningful quests
-    if (loreChronicle.size < 10) return;
+async function tryPatronAutoQuest(patron: IPatron, force: boolean = false): Promise<void> {
+    if (!force) {
+        // Guard: need enough world history for meaningful quests
+        if (loreChronicle.size < 10) return;
 
-    // 50% chance
-    if (Math.random() >= 0.5) return;
+        // 50% chance
+        if (Math.random() >= 0.5) return;
+    }
 
     console.log(`\n  ${C.cyan}💬 ${patron.name} scribbles a quest on the board...${C.reset}`);
 
@@ -485,7 +548,10 @@ async function summonPatron(rl: readline.Interface): Promise<void> {
     }
     console.log(`    ${C.cyan}0${C.reset}. Random`);
 
-    const choice = parseInt(await askQuestion(rl, 'Choose archetype: '));
+    const choiceStr = await askQuestion(rl, 'Choose archetype (add "q" to force quest, e.g. 1q): ');
+    const forceQuest = choiceStr.toLowerCase().endsWith('q');
+    const choice = parseInt(choiceStr);
+
     const archetype = choice > 0 && choice <= archetypes.length ? archetypes[choice - 1] : undefined;
     const patron = createPatron(archetype);
     gameState.addPatron(patron);
@@ -502,7 +568,7 @@ async function summonPatron(rl: readline.Interface): Promise<void> {
     const narrative = await renderArrivalNarrative(patron);
     console.log(`  ${C.dim}📖 ${narrative}${C.reset}`);
 
-    await tryPatronAutoQuest(patron);
+    await tryPatronAutoQuest(patron, forceQuest);
 }
 
 async function populateInn(): Promise<void> {
@@ -550,11 +616,22 @@ export async function startTUI(): Promise<void> {
         // Silently logged — TUI handles display
     });
 
+    eventBus.on('lore:guardian_arrived', ({ recentLore }) => {
+        // Since we want to interrupt politely via the TUI, we handle the 
+        // trigger explicitly within the loop rather than randomly via the event bus.
+    });
+
     banner();
     console.log(`  ${C.dim}Welcome, Innkeeper. The hearth is cold and the rooms are empty.${C.reset}`);
     console.log(`  ${C.dim}Summon patrons, post quests, and watch the math decide their fate.${C.reset}\n`);
 
     const loop = async (): Promise<void> => {
+        // Auto-trigger Guardian if threshold met
+        if (loreChronicle.unacknowledgedEntriesCount >= GUARDIAN_THRESHOLD && !isGuardianActive) {
+            const recentLore = loreChronicle.getUnacknowledgedLoreContext();
+            await handleGuardianVisit(rl, recentLore);
+        }
+
         showStatus();
         showMenu();
 
@@ -570,6 +647,10 @@ export async function startTUI(): Promise<void> {
             case '7': viewLedger(); break;
             case '8': await summonPatron(rl); break;
             case '9': await toggleModes(rl); break;
+            case 'G':
+                const recentLore = loreChronicle.getUnacknowledgedLoreContext();
+                await handleGuardianVisit(rl, recentLore);
+                break;
             case 'I': await populateInn(); break;
             case '0':
             case 'exit':
