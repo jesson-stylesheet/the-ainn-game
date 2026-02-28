@@ -12,14 +12,16 @@ export type SkillTag =
     | 'Agility' | 'Bravery' | 'Charisma' | 'Curiosity' | 'Constitution'
     | 'Defense' | 'MeleeWeapon' | 'LongRangeWeapon' | 'Fishing'
     | 'Foraging' | 'Navigation' | 'BasicMagic' | 'DarkMagic'
-    | 'HolyMagic' | 'Mining';
+    | 'HolyMagic' | 'Mining' | 'Crafting' | 'Intelligent'
+    | 'Dexterity' | 'Alchemy' | 'Cooking';
 
-/** Canonical ordered list of all 15 skill tags. */
+/** Canonical ordered list of all skill tags. */
 export const ALL_SKILL_TAGS: readonly SkillTag[] = [
     'Agility', 'Bravery', 'Charisma', 'Curiosity', 'Constitution',
     'Defense', 'MeleeWeapon', 'LongRangeWeapon', 'Fishing',
     'Foraging', 'Navigation', 'BasicMagic', 'DarkMagic',
-    'HolyMagic', 'Mining',
+    'HolyMagic', 'Mining', 'Crafting', 'Intelligent',
+    'Dexterity', 'Alchemy', 'Cooking',
 ] as const;
 
 // ── Skill Vector ────────────────────────────────────────────────────────

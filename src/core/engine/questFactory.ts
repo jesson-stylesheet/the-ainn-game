@@ -47,7 +47,7 @@ const MIN_TAG_VALUE = 2;
  * Maximum value a tag can have when the quest is very terse.
  * Prevents a 1-tag quest from requiring an impossible skill level.
  */
-const MAX_TAG_VALUE = 18;
+const MAX_TAG_VALUE = 20;
 
 /**
  * Words that count as "lore filler" — they add atmosphere but
@@ -160,6 +160,38 @@ const KEYWORD_MAP: Record<string, { tag: SkillTag; priority: number }[]> = {
     'temple': [{ tag: 'HolyMagic', priority: 2 }, { tag: 'Curiosity', priority: 1 }],
     'tavern': [{ tag: 'Charisma', priority: 2 }],
     'castle': [{ tag: 'Bravery', priority: 1 }, { tag: 'Defense', priority: 1 }, { tag: 'Navigation', priority: 1 }],
+
+    // Crafting
+    'craft': [{ tag: 'Crafting', priority: 3 }, { tag: 'Intelligent', priority: 1 }],
+    'build': [{ tag: 'Crafting', priority: 3 }, { tag: 'Constitution', priority: 1 }],
+    'forge': [{ tag: 'Crafting', priority: 3 }, { tag: 'Mining', priority: 1 }],
+    'repair': [{ tag: 'Crafting', priority: 3 }, { tag: 'Dexterity', priority: 1 }],
+
+    // Intelligent
+    'read': [{ tag: 'Intelligent', priority: 3 }, { tag: 'Curiosity', priority: 2 }],
+    'study': [{ tag: 'Intelligent', priority: 3 }, { tag: 'Curiosity', priority: 1 }],
+    'solve': [{ tag: 'Intelligent', priority: 3 }],
+    'decipher': [{ tag: 'Intelligent', priority: 3 }, { tag: 'BasicMagic', priority: 1 }],
+    'investigate': [{ tag: 'Intelligent', priority: 3 }, { tag: 'Curiosity', priority: 2 }],
+
+    // Dexterity
+    'pick': [{ tag: 'Dexterity', priority: 3 }, { tag: 'Agility', priority: 1 }],
+    'steal': [{ tag: 'Dexterity', priority: 3 }, { tag: 'Agility', priority: 2 }],
+    'lock': [{ tag: 'Dexterity', priority: 3 }, { tag: 'Intelligent', priority: 1 }],
+    'disarm': [{ tag: 'Dexterity', priority: 3 }, { tag: 'Intelligent', priority: 1 }],
+    'trap': [{ tag: 'Dexterity', priority: 2 }, { tag: 'Navigation', priority: 1 }],
+
+    // Alchemy
+    'brew': [{ tag: 'Alchemy', priority: 3 }, { tag: 'Cooking', priority: 1 }],
+    'potion': [{ tag: 'Alchemy', priority: 3 }, { tag: 'BasicMagic', priority: 1 }],
+    'poison': [{ tag: 'Alchemy', priority: 3 }, { tag: 'Foraging', priority: 1 }],
+    'transmute': [{ tag: 'Alchemy', priority: 3 }, { tag: 'BasicMagic', priority: 2 }],
+
+    // Cooking
+    'cook': [{ tag: 'Cooking', priority: 3 }, { tag: 'Foraging', priority: 1 }],
+    'bake': [{ tag: 'Cooking', priority: 3 }],
+    'stew': [{ tag: 'Cooking', priority: 3 }, { tag: 'Foraging', priority: 1 }],
+    'chef': [{ tag: 'Cooking', priority: 3 }, { tag: 'Charisma', priority: 1 }],
 };
 
 // ── Difficulty Words ────────────────────────────────────────────────────
@@ -320,7 +352,14 @@ export function parseQuestText(text: string): IQuest {
             baseDifficulty += DIFFICULTY_MODIFIERS[word];
         }
     }
-    const difficultyScalar = Math.max(10, Math.min(50, baseDifficulty + rollInt(-3, 3)));
+    const rawDifficulty = Math.max(10, Math.min(50, baseDifficulty + rollInt(-3, 3)));
+
+    // Calibrate: cap difficulty to 85% of total requirements sum
+    // so a perfect-match patron has a realistic chance (S ≈ totalReqs > D)
+    const totalReqSum = ALL_SKILL_TAGS.reduce((s, tag) => s + vector[tag], 0);
+    const difficultyScalar = totalReqSum > 0
+        ? Math.max(10, Math.min(rawDifficulty, Math.round(totalReqSum * 0.85)))
+        : rawDifficulty;
 
     const now = Date.now();
 

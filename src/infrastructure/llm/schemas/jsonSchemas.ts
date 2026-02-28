@@ -6,6 +6,19 @@
  * OpenRouter to enforce type-safe JSON responses from the LLM.
  */
 
+import { ALL_SKILL_TAGS } from '../../../core/types/entity';
+
+// ── Helpers ─────────────────────────────────────────────────────────────
+
+/** Build JSON Schema properties for the skill vector from the canonical tag list. */
+function buildSkillProperties(): Record<string, { type: string }> {
+    const props: Record<string, { type: string }> = {};
+    for (const tag of ALL_SKILL_TAGS) {
+        props[tag] = { type: 'number' };
+    }
+    return props;
+}
+
 // ── Quest Resolution Schema ────────────────────────────────────────────
 
 export const RESOLUTION_SCHEMA = {
@@ -52,30 +65,9 @@ export const QUEST_PARSE_SCHEMA = {
             },
             skills: {
                 type: 'object',
-                description: 'Skill requirements. Keys are exact SkillTag names, values are integers 1-18.',
-                properties: {
-                    Agility: { type: 'number' },
-                    Bravery: { type: 'number' },
-                    Charisma: { type: 'number' },
-                    Curiosity: { type: 'number' },
-                    Constitution: { type: 'number' },
-                    Defense: { type: 'number' },
-                    MeleeWeapon: { type: 'number' },
-                    LongRangeWeapon: { type: 'number' },
-                    Fishing: { type: 'number' },
-                    Foraging: { type: 'number' },
-                    Navigation: { type: 'number' },
-                    BasicMagic: { type: 'number' },
-                    DarkMagic: { type: 'number' },
-                    HolyMagic: { type: 'number' },
-                    Mining: { type: 'number' },
-                },
-                required: [
-                    'Agility', 'Bravery', 'Charisma', 'Curiosity', 'Constitution',
-                    'Defense', 'MeleeWeapon', 'LongRangeWeapon', 'Fishing',
-                    'Foraging', 'Navigation', 'BasicMagic', 'DarkMagic',
-                    'HolyMagic', 'Mining',
-                ],
+                description: 'Skill requirements. Keys are exact SkillTag names, values are integers 1-20.',
+                properties: buildSkillProperties(),
+                required: [...ALL_SKILL_TAGS],
                 additionalProperties: false,
             },
             difficulty: {

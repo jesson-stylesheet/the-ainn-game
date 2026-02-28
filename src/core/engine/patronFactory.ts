@@ -42,48 +42,48 @@ const NAME_SUFFIXES = [
 const ARCHETYPES: ArchetypeBlueprint[] = [
     {
         name: 'Human Warrior',
-        primarySkills: { MeleeWeapon: [10, 15], Defense: [10, 15], Constitution: [10, 15], Bravery: [10, 15] },
-        secondarySkills: { Agility: [5, 9], Charisma: [5, 9], Navigation: [5, 9], Foraging: [5, 9] },
+        primarySkills: { MeleeWeapon: [14, 20], Defense: [14, 20], Constitution: [14, 20], Bravery: [14, 20] },
+        secondarySkills: { Agility: [6, 12], Charisma: [6, 12], Navigation: [6, 12], Foraging: [6, 12] },
     },
     {
         name: 'Elven Archer',
-        primarySkills: { Agility: [10, 15], LongRangeWeapon: [10, 15], Navigation: [10, 15], Foraging: [10, 15] },
-        secondarySkills: { Curiosity: [5, 9], Constitution: [5, 9], Defense: [5, 9], BasicMagic: [5, 9] },
+        primarySkills: { Agility: [14, 20], LongRangeWeapon: [14, 20], Navigation: [14, 20], Foraging: [14, 20] },
+        secondarySkills: { Curiosity: [6, 12], Constitution: [6, 12], Defense: [6, 12], BasicMagic: [6, 12] },
     },
     {
         name: 'Dwarven Miner',
-        primarySkills: { Mining: [10, 15], Constitution: [10, 15], Bravery: [10, 15], Defense: [10, 15] },
-        secondarySkills: { MeleeWeapon: [5, 9], Navigation: [5, 9], Charisma: [5, 9], Foraging: [5, 9] },
+        primarySkills: { Mining: [14, 20], Constitution: [14, 20], Bravery: [14, 20], Defense: [14, 20] },
+        secondarySkills: { MeleeWeapon: [6, 12], Navigation: [6, 12], Charisma: [6, 12], Foraging: [6, 12] },
     },
     {
         name: 'Lizardman Mechanic',
-        primarySkills: { Curiosity: [10, 15], Agility: [10, 15], Constitution: [10, 15], Defense: [10, 15] },
-        secondarySkills: { Foraging: [5, 9], Navigation: [5, 9], MeleeWeapon: [5, 9], BasicMagic: [5, 9] },
+        primarySkills: { Curiosity: [14, 20], Agility: [14, 20], Constitution: [14, 20], Defense: [14, 20], Crafting: [14, 20] },
+        secondarySkills: { Foraging: [6, 12], Navigation: [6, 12], MeleeWeapon: [6, 12], BasicMagic: [6, 12] },
     },
     {
         name: 'Skeleton Necromancer',
-        primarySkills: { DarkMagic: [10, 15], Constitution: [10, 15], Curiosity: [10, 15], BasicMagic: [10, 15] },
-        secondarySkills: { Defense: [5, 9], Navigation: [5, 9], Foraging: [5, 9], Charisma: [5, 9] },
+        primarySkills: { DarkMagic: [14, 20], Constitution: [14, 20], Curiosity: [14, 20], BasicMagic: [14, 20] },
+        secondarySkills: { Defense: [6, 12], Navigation: [6, 12], Foraging: [6, 12], Charisma: [6, 12], Alchemy: [6, 12] },
     },
     {
         name: 'Goblin Wizard',
-        primarySkills: { BasicMagic: [10, 15], Curiosity: [10, 15], Agility: [10, 15], Foraging: [10, 15] },
-        secondarySkills: { Navigation: [5, 9], Defense: [5, 9], Bravery: [5, 9], MeleeWeapon: [5, 9] },
+        primarySkills: { BasicMagic: [14, 20], Curiosity: [14, 20], Agility: [14, 20], Foraging: [14, 20], Intelligent: [14, 20] },
+        secondarySkills: { Navigation: [6, 12], Defense: [6, 12], Bravery: [6, 12], MeleeWeapon: [6, 12] },
     },
     {
         name: 'Orc Berserker',
-        primarySkills: { MeleeWeapon: [10, 15], Bravery: [10, 15], Constitution: [10, 15], Defense: [10, 15] },
-        secondarySkills: { Agility: [5, 9], Foraging: [5, 9], Navigation: [5, 9], Charisma: [5, 9] },
+        primarySkills: { MeleeWeapon: [14, 20], Bravery: [14, 20], Constitution: [14, 20], Defense: [14, 20] },
+        secondarySkills: { Agility: [6, 12], Foraging: [6, 12], Navigation: [6, 12], Charisma: [6, 12] },
     },
     {
         name: 'Kitsune Cleric',
-        primarySkills: { HolyMagic: [10, 15], Charisma: [10, 15], Agility: [10, 15], Curiosity: [10, 15] },
-        secondarySkills: { BasicMagic: [5, 9], Navigation: [5, 9], Bravery: [5, 9], Defense: [5, 9] },
+        primarySkills: { HolyMagic: [14, 20], Charisma: [14, 20], Agility: [14, 20], Curiosity: [14, 20] },
+        secondarySkills: { BasicMagic: [6, 12], Navigation: [6, 12], Bravery: [6, 12], Defense: [6, 12], Dexterity: [6, 12] },
     },
     {
         name: 'Nekomimi Geisha',
-        primarySkills: { Charisma: [10, 15], Agility: [10, 15], Curiosity: [10, 15] },
-        secondarySkills: { Navigation: [5, 9], BasicMagic: [5, 9], Bravery: [5, 9], Foraging: [5, 9], Defense: [5, 9] },
+        primarySkills: { Charisma: [14, 20], Agility: [14, 20], Curiosity: [14, 20], Cooking: [14, 20] },
+        secondarySkills: { Navigation: [6, 12], BasicMagic: [6, 12], Bravery: [6, 12], Foraging: [6, 12], Defense: [6, 12], Dexterity: [6, 12] },
     },
 ];
 

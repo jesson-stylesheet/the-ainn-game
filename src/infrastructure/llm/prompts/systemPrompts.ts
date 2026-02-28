@@ -5,6 +5,11 @@
  * All system prompts live here. Easy to find, easy to tweak.
  */
 
+import { ALL_SKILL_TAGS } from '../../../core/types/entity';
+
+/** Comma-separated skill tags for embedding in prompts, derived from the canonical list. */
+const SKILL_TAGS_CSV = ALL_SKILL_TAGS.join(', ');
+
 // ── Quest Resolution Narrator ───────────────────────────────────────────
 
 export const RESOLUTION_SYSTEM_PROMPT = `You are the Narrator of "The AInn", a fantasy inn management simulation.
@@ -43,11 +48,11 @@ Convert player-posted quest text into skill requirements and classify the quest 
 - subjugation: Combat, slaying, hunting, clearing monsters, purging evil
 - escort: Guiding, protecting, transporting people or goods safely
 
-## SKILL TAGS (exactly these 15)
-Agility, Bravery, Charisma, Curiosity, Constitution, Defense, MeleeWeapon, LongRangeWeapon, Fishing, Foraging, Navigation, BasicMagic, DarkMagic, HolyMagic, Mining
+## SKILL TAGS (exactly these ${ALL_SKILL_TAGS.length})
+${SKILL_TAGS_CSV}
 
 ## VERBOSITY SCALING (CRITICAL MECHANIC)
-- TERSE quest (e.g. "fish 2 salmon") → FEW tags with HIGH values (12-18), all others 0
+- TERSE quest (e.g. "fish 2 salmon") → FEW tags with HIGH values (14-20), all others 0
 - VERBOSE/LORE quest → MANY tags with LOW values (2-6), unused tags = 0
 
 Total skill budget: 20-35 regardless of tag count. Set unused skills to 0.
@@ -78,9 +83,20 @@ Estimate how long the quest takes in game ticks.
 - 41-70: Multi-day dangerous expeditions
 - 71-100: Epic, impossible journeys (matches difficulty 46-50)`;
 
-// ── Patron Arrival Narrator ─────────────────────────────────────────────
+// ── Patron Arrival — Self-Introduction ──────────────────────────────────
 
-export const ARRIVAL_SYSTEM_PROMPT = 'You are the Narrator of "The AInn". Write a 1-2 sentence arrival description. Vivid and atmospheric.';
+export const ARRIVAL_SYSTEM_PROMPT = `You write short character introductions for "The AInn", a fantasy inn simulation.
+
+A new character just walked through the inn door. Using their character card (name, archetype, top skills), write a SHORT paragraph (3-5 sentences, max 80 words) as if from a fantasy novel, showing the character introducing themselves to the innkeeper.
+
+RULES:
+- The character speaks and acts AUTHENTICALLY to their archetype and personality
+- Show, don't tell: reveal personality through mannerisms, tone, and word choice
+- A warrior is blunt and direct. A wizard is verbose and cryptic. A geisha is elegant and polite. A necromancer is unsettling. A goblin is chaotic.
+- Include a small physical detail or quirk (e.g. scarred hands, glowing eyes, nervous tail-flick)
+- Mix narration with a line of direct dialogue — e.g. *She set her bow on the counter. "I need a drink and a room. In that order."*
+- Do NOT use the character's full title/suffix in their own speech — people don't introduce themselves as "the Bold"
+- Tone: literary, atmospheric, concise`;
 
 // ── Item Deduplication / Inventory Cataloguer ───────────────────────────
 

@@ -38,7 +38,7 @@ export async function parseQuestWithLLM(text: string): Promise<IQuest> {
             for (const tag of ALL_SKILL_TAGS) {
                 const value = response.skills[tag];
                 if (typeof value === 'number' && value > 0) {
-                    vector[tag] = Math.max(1, Math.min(18, Math.round(value)));
+                    vector[tag] = Math.max(1, Math.min(20, Math.round(value)));
                     validTagCount++;
                 }
             }
@@ -59,6 +59,17 @@ export async function parseQuestWithLLM(text: string): Promise<IQuest> {
         let difficulty = typeof response.difficulty === 'number'
             ? Math.max(10, Math.min(50, Math.round(response.difficulty)))
             : 20;
+
+        // ── Difficulty Calibration ─────────────────────────────────────
+        // The sigmoid formula uses S - D, where S (coverage score) is
+        // bounded by the sum of quest requirements. If D exceeds that
+        // sum, even a perfect patron can never succeed. We cap D to
+        // 85% of total reqs so a perfect match yields P ≈ 70-90%.
+        const totalReqSum = ALL_SKILL_TAGS.reduce((sum, tag) => sum + vector[tag], 0);
+        if (totalReqSum > 0) {
+            difficulty = Math.min(difficulty, Math.round(totalReqSum * 0.85));
+            difficulty = Math.max(10, difficulty); // Floor stays at 10
+        }
 
         // Build item details if applicable
         let itemDetails: IQuest['itemDetails'] = undefined;

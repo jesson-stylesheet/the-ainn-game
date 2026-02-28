@@ -8,6 +8,7 @@
 
 import { chatCompletionStructured, chatCompletion } from './openRouterClient';
 import type { IPatron, IQuest, QuestResolutionResult, PatronHealthStatus } from '../../core/types/entity';
+import { ALL_SKILL_TAGS } from '../../core/types/entity';
 import { loreChronicle } from '../../core/engine/loreChronicle';
 
 // ── Centralized imports ────────────────────────────────────────────────
@@ -165,15 +166,22 @@ Write a quest that this patron would post on the board.`;
  */
 export async function renderArrivalNarrative(patron: IPatron): Promise<string> {
     try {
+        // Build a full character card for the LLM
+        const allSkills = ALL_SKILL_TAGS
+            .filter(t => patron.skills[t] > 0)
+            .map(t => `${t}:${patron.skills[t]}`)
+            .join(', ');
+        const visitStatus = patron.memoryIds && patron.memoryIds.length > 0 ? 'RETURNING patron' : 'First visit';
+
         return await chatCompletion(
             [
                 { role: 'system', content: ARRIVAL_SYSTEM_PROMPT },
                 {
                     role: 'user',
-                    content: `Name: ${patron.name} | Archetype: ${patron.archetype} | Health: ${patron.healthStatus} | Skills: ${getTopSkills(patron, 3)} | ${patron.memoryIds && patron.memoryIds.length > 0 ? 'RETURNING patron.' : 'First visit.'}`,
+                    content: `CHARACTER CARD:\nName: ${patron.name}\nArchetype: ${patron.archetype}\nHealth: ${patron.healthStatus}\nTop Skills: ${getTopSkills(patron, 3)}\nAll Skills: ${allSkills}\nVisit: ${visitStatus}`,
                 },
             ],
-            { temperature: 0.9, maxTokens: 128 }
+            { temperature: 0.9, maxTokens: 200 }
         );
     } catch {
         return `${patron.name} the ${patron.archetype} pushes through the door and surveys the room.`;
