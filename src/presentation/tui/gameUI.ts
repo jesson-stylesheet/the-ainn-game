@@ -309,8 +309,7 @@ async function assignPatron(rl: readline.Interface): Promise<void> {
 
         if (useDB) {
             try {
-                await db.assignPatronToQuest(patron.id, quest.id);
-                await db.updatePatronState(patron.id, 'ON_QUEST');
+                await db.assignPatronToQuestAtomic(patron.id, quest.id);
             } catch (e) {
                 console.log(`  ${C.red}DB sync failed: ${(e as Error).message}${C.reset}`);
             }

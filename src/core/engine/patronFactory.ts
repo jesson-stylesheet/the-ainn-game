@@ -162,6 +162,8 @@ export function createPatron(archetypeName?: string): IPatron {
         arrivalTimestamp: Date.now(),
         equipment: createEmptyEquipment(),
         inventory: [],
+        gold: 0,
+        copper: 0,
     };
 }
 

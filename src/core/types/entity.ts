@@ -58,6 +58,8 @@ export type EquipmentSlot =
     | 'headwear' | 'bodyArmor' | 'legwear' | 'footwear'
     | 'righthand' | 'lefthand';
 
+export type ItemLocation = 'INN_VAULT' | 'PATRON_INVENTORY' | 'EQUIPPED' | 'LOST';
+
 export interface IItem {
     id: string;              // UUID
     name: string;
@@ -66,6 +68,8 @@ export interface IItem {
     quantity: number;
     ownerPatronId?: string | null;  // If owned by a patron
     equippedSlot?: EquipmentSlot | null; // If worn by the patron
+    location: ItemLocation;  // Where this item currently lives
+    sourceQuestId?: string | null; // Quest that produced this item
 }
 
 export type PatronEquipment = Record<EquipmentSlot, IItem | null>;
@@ -95,6 +99,9 @@ export interface IPatron {
 
     equipment: PatronEquipment;   // Items currently worn/wielded
     inventory: IItem[];           // Items held but not equipped
+
+    gold: number;                 // Patron's personal gold
+    copper: number;               // Patron's personal copper (100 copper = 1 gold)
 
     // Future expansion slots (see Blueprint §9.2 — Vectorized Grudges)
     memoryIds?: string[];

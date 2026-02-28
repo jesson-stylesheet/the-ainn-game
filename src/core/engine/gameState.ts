@@ -6,7 +6,7 @@
  * syncs to Supabase. For testing, it IS the source of truth.
  */
 
-import type { IPatron, IQuest, QuestResolutionResult, PatronState, IItem, EquipmentSlot } from '../types/entity';
+import type { IPatron, IQuest, QuestResolutionResult, PatronState, IItem, ItemLocation, EquipmentSlot } from '../types/entity';
 import { eventBus } from './eventBus';
 import { generateUUID } from './utils';
 
@@ -15,6 +15,29 @@ class GameState {
     private quests: Map<string, IQuest> = new Map();
     private resolvedResults: QuestResolutionResult[] = [];
     private items: Map<string, IItem> = new Map();
+
+    // ── Inn Global State ────────────────────────────────────────────────
+    private _currentTick = 0;
+    private _innGold = 100;
+    private _innCopper = 0;
+    private _reputation = 0;
+
+    get currentTick(): number { return this._currentTick; }
+    get innGold(): number { return this._innGold; }
+    get innCopper(): number { return this._innCopper; }
+    get reputation(): number { return this._reputation; }
+
+    tick(): number {
+        this._currentTick++;
+        return this._currentTick;
+    }
+
+    setInnState(state: { currentTick?: number; gold?: number; copper?: number; reputation?: number }): void {
+        if (state.currentTick !== undefined) this._currentTick = state.currentTick;
+        if (state.gold !== undefined) this._innGold = state.gold;
+        if (state.copper !== undefined) this._innCopper = state.copper;
+        if (state.reputation !== undefined) this._reputation = state.reputation;
+    }
 
     // ── Patrons ─────────────────────────────────────────────────────────
 
@@ -118,8 +141,10 @@ class GameState {
                     category: quest.itemDetails.category,
                     rarity: quest.itemDetails.rarity,
                     quantity: quest.itemDetails.quantity,
-                    ownerPatronId: null, // Goes straight to the Inn
-                    equippedSlot: null
+                    ownerPatronId: null,
+                    equippedSlot: null,
+                    location: 'INN_VAULT',
+                    sourceQuestId: quest.id,
                 };
                 this.addItem(newItem);
             }
@@ -248,6 +273,10 @@ class GameState {
         this.quests.clear();
         this.resolvedResults = [];
         this.items.clear();
+        this._currentTick = 0;
+        this._innGold = 100;
+        this._innCopper = 0;
+        this._reputation = 0;
     }
 }
 
