@@ -74,9 +74,16 @@ class LoreChronicle {
     }
 
     /**
-     * Reset the unacknowledged counter after a Guardian visit.
+     * Remove the synthesized entries and reset the counter after a Guardian visit.
+     * At call-time the array is: [...older, ...N unacknowledged, SYNTHESIS].
+     * We splice out the N unacknowledged entries, keeping older + SYNTHESIS.
      */
     acknowledgeEntries(): void {
+        if (this.unacknowledgedCount > 0) {
+            // The synthesis entry is the last element; the N entries before it are what we consume.
+            const spliceStart = this.entries.length - 1 - this.unacknowledgedCount;
+            this.entries.splice(spliceStart, this.unacknowledgedCount);
+        }
         this.unacknowledgedCount = 0;
     }
 

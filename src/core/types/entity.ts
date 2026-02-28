@@ -113,6 +113,7 @@ export interface IQuest {
     difficultyScalar: number;     // D — generally 10–50
     resolutionTicks: number;      // Ticks to resolve (10=easy, 100=hard)
     assignedPatronId: string | null;
+    postedByPatronId: string | null; // Patron who posted this quest (prevents self-assignment)
     status: QuestStatus;
     deadlineTimestamp: number;    // Unix epoch (ms)
 

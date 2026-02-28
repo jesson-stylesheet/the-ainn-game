@@ -332,6 +332,7 @@ export function parseQuestText(text: string): IQuest {
         difficultyScalar,
         resolutionTicks: Math.floor(difficultyScalar * 2), // Mock mapping (10 D = 20 ticks, 50 D = 100 ticks)
         assignedPatronId: null,
+        postedByPatronId: null,
         status: 'POSTED',
         deadlineTimestamp: now + (DEFAULT_QUEST_DEADLINE_HOURS * TICK_MULTIPLIER * 1000),
     };

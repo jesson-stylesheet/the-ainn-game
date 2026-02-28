@@ -250,6 +250,7 @@ function rowToQuest(row: QuestRow): IQuest {
         difficultyScalar: row.difficulty_scalar,
         resolutionTicks: row.resolution_ticks ?? 20, // default if older row without ticks
         assignedPatronId: row.assigned_patron_id,
+        postedByPatronId: null, // DB quests are player-posted
         status: row.status as IQuest['status'],
         deadlineTimestamp: row.deadline_timestamp,
     };

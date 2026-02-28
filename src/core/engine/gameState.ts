@@ -71,6 +71,7 @@ class GameState {
         if (!patron || !quest) return false;
         if (patron.state !== 'IDLE' && patron.state !== 'LOUNGING') return false;
         if (quest.status !== 'POSTED') return false;
+        if (quest.postedByPatronId && quest.postedByPatronId === patronId) return false; // Can't do your own quest
 
         patron.state = 'ON_QUEST';
         quest.assignedPatronId = patronId;

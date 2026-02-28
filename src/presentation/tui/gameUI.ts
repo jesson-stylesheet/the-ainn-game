@@ -519,6 +519,7 @@ async function tryPatronAutoQuest(patron: IPatron, force: boolean = false): Prom
 
         // Feed the generated text through the normal quest parser
         const quest = await parseQuestWithLLM(questText);
+        quest.postedByPatronId = patron.id;
         gameState.addQuest(quest);
 
         const tagCount = ALL_SKILL_TAGS.filter(t => quest.requirements[t] > 0).length;

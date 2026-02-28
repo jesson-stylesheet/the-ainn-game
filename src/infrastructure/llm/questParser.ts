@@ -96,6 +96,7 @@ export async function parseQuestWithLLM(text: string): Promise<IQuest> {
             difficultyScalar: difficulty,
             resolutionTicks: Math.max(10, Math.round(response.resolutionTicks ?? 20)),
             assignedPatronId: null,
+            postedByPatronId: null,
             status: 'POSTED',
             deadlineTimestamp: now + (DEFAULT_QUEST_DEADLINE_HOURS * TICK_MULTIPLIER * 1000),
             ...(itemDetails ? { itemDetails } : {}),
