@@ -18,7 +18,7 @@ import { eventBus } from '../../core/engine/eventBus';
 import { loreChronicle } from '../../core/engine/loreChronicle';
 import { ticker } from '../../core/engine/ticker';
 import { resolveQuest } from '../../core/math/probability';
-import type { SkillTag, IPatron, IQuest, QuestResolutionResult } from '../../core/types/entity';
+import type { SkillTag, IPatron, IQuest, QuestResolutionResult, ItemCategory, EquipmentSlot } from '../../core/types/entity';
 import { ALL_SKILL_TAGS } from '../../core/types/entity';
 import * as db from '../../infrastructure/db/queries';
 import { parseQuestWithLLM } from '../../infrastructure/llm/questParser';
@@ -73,9 +73,58 @@ function showMenu(): void {
     console.log(`    ${C.cyan}2${C.reset} View Patrons          ${C.cyan}7${C.reset} View Inn Ledger`);
     console.log(`    ${C.cyan}3${C.reset} View Quest Board      ${C.cyan}8${C.reset} Summon New Patron`);
     console.log(`    ${C.cyan}4${C.reset} Assign Patron         ${C.cyan}9${C.reset} Toggle LLM/DB`);
-    console.log(`    ${C.cyan}5${C.reset} Resolve All Quests    ${C.cyan}G${C.reset} Summon Lore Guardian (${loreChronicle.unacknowledgedEntriesCount}/${GUARDIAN_THRESHOLD})`);
+    console.log(`    ${C.cyan}5${C.reset} Resolve All Quests    ${C.cyan}E${C.reset} Equip Patron`);
+    console.log(`    ${C.cyan}G${C.reset} Summon Lore Guardian (${loreChronicle.unacknowledgedEntriesCount}/${GUARDIAN_THRESHOLD})`);
     console.log(`    ${C.cyan}I${C.reset} Populate Inn (All 9) / ${C.cyan}0${C.reset} Exit`);
     console.log('');
+}
+
+// ── Equipment Helpers ───────────────────────────────────────────────────
+
+const CATEGORY_TO_SLOT: Record<string, EquipmentSlot | null> = {
+    meleeWeapon: 'righthand',
+    magicWeapon: 'righthand',
+    rangeWeapon: 'righthand',
+    shield: 'lefthand',
+    lightHeadGear: 'headwear',
+    heavyHeadGear: 'headwear',
+    lightBodyArmor: 'bodyArmor',
+    heavyBodyArmor: 'bodyArmor',
+    lightLegGear: 'legwear',
+    heavyLegGear: 'legwear',
+    lightFootGear: 'footwear',
+    heavyFootGear: 'footwear',
+    questItem: null,
+    consumables: null,
+};
+
+const SLOT_ICONS: Record<EquipmentSlot, string> = {
+    righthand: '🗡 ',
+    lefthand: '🛡 ',
+    headwear: '🪖 ',
+    bodyArmor: '🥋 ',
+    legwear: '🦿 ',
+    footwear: '👢 ',
+};
+
+const SLOT_LABELS: Record<EquipmentSlot, string> = {
+    righthand: 'Right Hand',
+    lefthand: 'Left Hand',
+    headwear: 'Head',
+    bodyArmor: 'Body',
+    legwear: 'Legs',
+    footwear: 'Feet',
+};
+
+function getRarityLabel(r: number): { label: string; color: string } {
+    if (r >= 85) return { label: 'Legendary', color: C.magenta };
+    if (r >= 60) return { label: 'Rare', color: C.yellow };
+    if (r >= 30) return { label: 'Uncommon', color: C.cyan };
+    return { label: 'Common', color: C.green };
+}
+
+function formatCategory(cat: string): string {
+    return cat.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
 }
 
 function printSkills(skills: Record<SkillTag, number>, indent: string = '    '): void {
@@ -226,6 +275,26 @@ function printCharacterSheet(p: IPatron): void {
     const wins = results.filter(r => r.success).length;
     const losses = results.filter(r => !r.success).length;
 
+    // ── Equipment ──
+    console.log(`  ${C.gray}╠══════════════════════════════════════════════╣${C.reset}`);
+    console.log(`  ${C.gray}║${C.reset}  ${C.bright}EQUIPMENT${C.reset}`);
+
+    const slots: EquipmentSlot[] = ['headwear', 'bodyArmor', 'legwear', 'footwear', 'righthand', 'lefthand'];
+    let hasAny = false;
+    for (const slot of slots) {
+        const item = p.equipment[slot];
+        const icon = SLOT_ICONS[slot];
+        const label = SLOT_LABELS[slot].padEnd(11);
+        if (item) {
+            hasAny = true;
+            const { label: rl, color: rc } = getRarityLabel(item.rarity);
+            console.log(`  ${C.gray}║${C.reset}  ${icon}${C.dim}${label}${C.reset} ${C.bright}${item.name}${C.reset} ${rc}[${rl}]${C.reset}`);
+        } else {
+            console.log(`  ${C.gray}║${C.reset}  ${icon}${C.dim}${label} — empty —${C.reset}`);
+        }
+    }
+
+    // ── Quest Record ──
     console.log(`  ${C.gray}╠══════════════════════════════════════════════╣${C.reset}`);
     console.log(`  ${C.gray}║${C.reset}  ${C.bright}QUEST RECORD${C.reset}`);
     console.log(`  ${C.gray}║${C.reset}  ${C.green}Wins: ${wins}${C.reset}  ${C.red}Losses: ${losses}${C.reset}  ${C.dim}Total: ${results.length}${C.reset}`);
@@ -417,7 +486,9 @@ function viewLore(): void {
 
 function viewLedger(): void {
     const inv = gameState.getInnInventory();
-    console.log(`\n  ${C.bright}💰 Inn Ledger & Stash${C.reset}\n`);
+    console.log(`\n  ${C.bright}💰 Inn Ledger & Stash${C.reset}`);
+    console.log(`  ${C.dim}Gold: ${gameState.innGold}g ${gameState.innCopper}c  │  Reputation: ${gameState.reputation}${C.reset}\n`);
+
     if (inv.length === 0) {
         console.log(`  ${C.dim}The cellar is empty. Complete 'itemRetrieval' quests to gather resources.${C.reset}`);
         return;
@@ -427,11 +498,89 @@ function viewLedger(): void {
     inv.sort((a, b) => b.rarity - a.rarity);
 
     for (const item of inv) {
-        const r = item.rarity;
-        const rarityColor = r >= 85 ? C.magenta : r >= 60 ? C.yellow : r >= 30 ? C.cyan : C.green;
-        const rarityLabel = r >= 85 ? 'Legendary' : r >= 60 ? 'Rare' : r >= 30 ? 'Uncommon' : 'Common';
+        const { label: rarityLabel, color: rarityColor } = getRarityLabel(item.rarity);
+        const catDisplay = formatCategory(item.category);
+        const equippable = CATEGORY_TO_SLOT[item.category] !== null;
+        const equipTag = equippable ? `${C.cyan}⚔${C.reset}` : `${C.dim}·${C.reset}`;
 
-        console.log(`  📦 ${C.bright}${item.quantity}x${C.reset} ${item.name.padEnd(20)} ${rarityColor}[${rarityLabel}] (R:${r.toFixed(1)})${C.reset}`);
+        console.log(`  ${equipTag} ${C.bright}${item.quantity}x${C.reset} ${item.name.padEnd(22)} ${C.dim}${catDisplay.padEnd(16)}${C.reset} ${rarityColor}[${rarityLabel}] (R:${item.rarity.toFixed(1)})${C.reset}`);
+    }
+    console.log(`\n  ${C.dim}⚔ = equippable  · = not equippable${C.reset}`);
+}
+
+// ── Equip Patron ────────────────────────────────────────────────────────
+
+async function equipPatron(rl: readline.Interface): Promise<void> {
+    // 1. List available patrons (IDLE or LOUNGING)
+    const availablePatrons = gameState.getAllPatrons().filter(
+        p => p.state === 'IDLE' || p.state === 'LOUNGING'
+    );
+    if (availablePatrons.length === 0) {
+        console.log(`\n  ${C.red}No idle or lounging patrons to equip.${C.reset}`);
+        return;
+    }
+
+    // 2. List equippable items in the inn vault
+    const vaultItems = gameState.getInnInventory().filter(
+        item => CATEGORY_TO_SLOT[item.category] !== null && CATEGORY_TO_SLOT[item.category] !== undefined
+    );
+    if (vaultItems.length === 0) {
+        console.log(`\n  ${C.red}No equippable items in the Inn vault.${C.reset}`);
+        console.log(`  ${C.dim}Complete 'itemRetrieval' quests for weapons, armor, and shields.${C.reset}`);
+        return;
+    }
+
+    // Show patrons
+    console.log(`\n  ${C.bright}Available Patrons:${C.reset}`);
+    availablePatrons.forEach((p, i) => {
+        const equipped = Object.values(p.equipment).filter(Boolean).length;
+        console.log(`    ${C.cyan}${i + 1}${C.reset}. ${C.bright}${p.name}${C.reset} (${p.archetype}) ${C.dim}[${equipped}/6 slots]${C.reset}`);
+    });
+
+    const patronChoice = await askQuestion(rl, '\n  Select patron #: ');
+    const pIdx = parseInt(patronChoice) - 1;
+    if (isNaN(pIdx) || pIdx < 0 || pIdx >= availablePatrons.length) {
+        console.log(`  ${C.red}Invalid selection.${C.reset}`);
+        return;
+    }
+    const patron = availablePatrons[pIdx];
+
+    // Show equippable items
+    console.log(`\n  ${C.bright}Inn Vault — Equipment:${C.reset}`);
+    vaultItems.forEach((item, i) => {
+        const slot = CATEGORY_TO_SLOT[item.category]!;
+        const { label: rl, color: rc } = getRarityLabel(item.rarity);
+        const catDisplay = formatCategory(item.category);
+        const currentOccupant = patron.equipment[slot];
+        const conflict = currentOccupant ? ` ${C.yellow}(replaces: ${currentOccupant.name})${C.reset}` : '';
+
+        console.log(`    ${C.cyan}${i + 1}${C.reset}. ${C.bright}${item.name}${C.reset} ${C.dim}${catDisplay}${C.reset} ${rc}[${rl}]${C.reset} → ${SLOT_ICONS[slot]}${SLOT_LABELS[slot]}${conflict}`);
+    });
+
+    const itemChoice = await askQuestion(rl, '\n  Select item # (or 0 to cancel): ');
+    const iIdx = parseInt(itemChoice) - 1;
+    if (isNaN(iIdx) || iIdx < 0 || iIdx >= vaultItems.length) {
+        console.log(`  ${C.dim}Cancelled.${C.reset}`);
+        return;
+    }
+    const item = vaultItems[iIdx];
+    const slot = CATEGORY_TO_SLOT[item.category]!;
+
+    // Equip it
+    const ok = gameState.equipItem(patron.id, item.id, slot);
+    if (ok) {
+        const { label: rl, color: rc } = getRarityLabel(item.rarity);
+        console.log(`\n  ${C.green}✓ ${patron.name} equipped ${rc}${item.name}${C.reset}${C.green} in ${SLOT_LABELS[slot]}.${C.reset}`);
+
+        if (useDB) {
+            try {
+                await db.updateItemLocation(item.id, patron.id, slot, 'EQUIPPED');
+            } catch (e) {
+                console.log(`  ${C.red}DB sync failed: ${(e as Error).message}${C.reset}`);
+            }
+        }
+    } else {
+        console.log(`  ${C.red}✗ Failed to equip item.${C.reset}`);
     }
 }
 
@@ -651,6 +800,7 @@ export async function startTUI(): Promise<void> {
                 const recentLore = loreChronicle.getUnacknowledgedLoreContext();
                 await handleGuardianVisit(rl, recentLore);
                 break;
+            case 'E': await equipPatron(rl); break;
             case 'I': await populateInn(); break;
             case '0':
             case 'exit':

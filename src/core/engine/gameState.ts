@@ -194,9 +194,9 @@ class GameState {
         return Array.from(this.items.values());
     }
 
-    /** Returns the inn's own inventory (unassigned items). */
+    /** Returns the inn's own inventory (items in the vault). */
     getInnInventory(): IItem[] {
-        return Array.from(this.items.values()).filter(i => !i.ownerPatronId);
+        return Array.from(this.items.values()).filter(i => i.location === 'INN_VAULT');
     }
 
     /** Move an item from the inn to a patron's equipment slot. */
@@ -221,6 +221,7 @@ class GameState {
 
         item.ownerPatronId = patronId;
         item.equippedSlot = slot;
+        item.location = 'EQUIPPED';
         patron.equipment[slot] = item;
 
         return true;
@@ -236,6 +237,7 @@ class GameState {
 
         item.ownerPatronId = null;
         item.equippedSlot = null;
+        item.location = 'INN_VAULT';
         patron.equipment[slot] = null;
 
         return true;
