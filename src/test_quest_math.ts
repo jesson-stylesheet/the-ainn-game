@@ -16,7 +16,7 @@ import {
     computeEquipmentBonus,
 } from './core/math/probability';
 import { ALL_SKILL_TAGS, type SkillVector } from './core/types/entity';
-import { GAMMA } from './core/constants';
+import { GAMMA, SIGMOID_TEMPERATURE } from './core/constants';
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -37,7 +37,7 @@ function separator(title: string): void {
 interface TestScenario {
     name: string;
     questText: string;
-    patronArchetype: string;
+    patronArchetype: ['human' | 'elven' | 'dwarven' | 'lizardman' | 'skeleton' | 'goblin' | 'orc' | 'kitsune' | 'nekomimi', 'warrior' | 'archer' | 'miner' | 'mechanic' | 'necromancer' | 'wizard' | 'berserker' | 'cleric' | 'geisha'];
     expectedOutcome: 'HIGH' | 'MODERATE' | 'LOW';
     reasoning: string;
 }
@@ -46,28 +46,28 @@ const SCENARIOS: TestScenario[] = [
     {
         name: '1. Perfect Match — Warrior vs Combat',
         questText: 'Slay the dragon terrorizing the mountain pass. It has killed many brave warriors already.',
-        patronArchetype: 'Human Warrior',
+        patronArchetype: ['human', 'warrior'],
         expectedOutcome: 'HIGH',
         reasoning: 'Warrior has high MeleeWeapon, Bravery, Defense, Constitution — all combat tags.',
     },
     {
         name: '2. Total Mismatch — Miner vs Diplomacy',
         questText: 'Negotiate a peace treaty between the warring elven clans. Use charm and persuasion to broker a deal.',
-        patronArchetype: 'Dwarven Miner',
+        patronArchetype: ['dwarven', 'miner'],
         expectedOutcome: 'LOW',
         reasoning: 'Miner has Mining, Constitution, Bravery — zero Charisma primary. Diplomacy needs Charisma.',
     },
     {
         name: '3. Partial Match — Archer vs Exploration',
         questText: 'Scout the ancient forest and find the hidden temple. Hunt any beasts along the way.',
-        patronArchetype: 'Elven Archer',
+        patronArchetype: ['elven', 'archer'],
         expectedOutcome: 'HIGH',
         reasoning: 'Archer has Navigation, Foraging, LongRangeWeapon — good for scouting, hunting, forest.',
     },
     {
         name: '4. New Skill Test — Geisha vs Cooking Quest',
         questText: 'Cook a legendary feast for the visiting king. Bake the finest pastries and stew a hearty meal.',
-        patronArchetype: 'Nekomimi Geisha',
+        patronArchetype: ['nekomimi', 'geisha'],
         expectedOutcome: 'HIGH',
         reasoning: 'Geisha has Cooking primary [14-20]. Quest should trigger Cooking tag heavily.',
     },
@@ -87,7 +87,7 @@ async function runTests(): Promise<void> {
     for (const scenario of SCENARIOS) {
         separator(scenario.name);
         console.log(`  Quest: "${scenario.questText}"`);
-        console.log(`  Patron: ${scenario.patronArchetype}`);
+        console.log(`  Patron: ${scenario.patronArchetype.join(' ')}`);
         console.log(`  Expected: ${scenario.expectedOutcome} probability`);
         console.log(`  Why: ${scenario.reasoning}`);
 
@@ -104,7 +104,7 @@ async function runTests(): Promise<void> {
 
         // Step 2: Create patron
         console.log(`\n  ── Step 2: Patron Creation ──`);
-        const patron = createPatron(scenario.patronArchetype);
+        const patron = createPatron(...scenario.patronArchetype);
         console.log(`  Name: ${patron.name} (${patron.archetype})`);
         printSkillVector('Patron Skills', patron.skills);
 
@@ -130,12 +130,20 @@ async function runTests(): Promise<void> {
         // Step 5: Sanity check
         const pPercent = result.probability * 100;
         let pass = false;
-        if (scenario.expectedOutcome === 'HIGH' && pPercent > 50) pass = true;
-        if (scenario.expectedOutcome === 'MODERATE' && pPercent >= 25 && pPercent <= 75) pass = true;
-        if (scenario.expectedOutcome === 'LOW' && pPercent < 50) pass = true;
+
+        // With GAMMA=1.50 and SIGMOID_TEMPERATURE=4.0, the d20 roll introduces meaningful
+        // variance but the curve is flattened. We evaluate the 'baseline' probability
+        // (if d20 = 10.5) to determine if stats were aligned as expected.
+        const baselineExponent = -(S + eqBonus - D) / SIGMOID_TEMPERATURE;
+        const baselineP = 1 / (1 + Math.exp(baselineExponent));
+        const baselinePercent = baselineP * 100;
+
+        if (scenario.expectedOutcome === 'HIGH' && baselinePercent > 50) pass = true;
+        if (scenario.expectedOutcome === 'MODERATE' && baselinePercent >= 25 && baselinePercent <= 75) pass = true;
+        if (scenario.expectedOutcome === 'LOW' && baselinePercent < 50) pass = true;
 
         const verdict = pass ? '✅ PASS' : '⚠️  UNEXPECTED';
-        console.log(`\n  VERDICT: ${verdict} (expected ${scenario.expectedOutcome}, got ${pPercent.toFixed(1)}%)`);
+        console.log(`\n  VERDICT: ${verdict} (Baseline P was ${baselinePercent.toFixed(1)}%, actual P is ${pPercent.toFixed(1)}% due to roll of ${result.d20Roll})`);
 
         results.push({
             name: scenario.name,

@@ -112,7 +112,7 @@ export interface IPatron {
 
 export type QuestStatus = 'POSTED' | 'ACCEPTED' | 'FAILED' | 'COMPLETED';
 
-export type QuestType = 'diplomacy' | 'itemRetrieval' | 'subjugation' | 'escort';
+export type QuestType = 'diplomacy' | 'itemRetrieval' | 'subjugation' | 'crafting';
 
 export interface IQuest {
     id: string;                   // UUID

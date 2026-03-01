@@ -41,7 +41,7 @@ MATH:
 - d20: ${result.d20Roll}/20
 - P(Success): ${(result.probability * 100).toFixed(1)}%
 - Fate: ${result.rawRoll.toFixed(3)} ${result.success ? '≤' : '>'} ${result.probability.toFixed(3)}
-- Weak Skills: ${result.weakestTags.join(', ')}
+- Weak Skills: ${result.weakestTags.length > 0 ? result.weakestTags.join(', ') : 'None (Perfectly Qualified)'}
 - Top Patron Skills: ${getTopSkills(patron, 4)}`;
 
     try {

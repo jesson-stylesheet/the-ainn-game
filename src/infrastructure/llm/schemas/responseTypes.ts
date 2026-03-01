@@ -20,7 +20,9 @@ export interface ResolutionNarrative {
 // ── Quest Parse ─────────────────────────────────────────────────────────
 
 export interface QuestParseResult {
-    questType: 'diplomacy' | 'itemRetrieval' | 'subjugation' | 'escort';
+    isLegitimate: boolean;
+    rejectionReason: string;
+    questType: 'diplomacy' | 'itemRetrieval' | 'subjugation' | 'crafting';
     skills: Record<string, number>;
     difficulty: number;
     resolutionTicks: number;

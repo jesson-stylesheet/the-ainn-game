@@ -20,7 +20,7 @@ import { parseQuestText as mockParseQuestText } from '../../core/engine/questFac
 import { gameState } from '../../core/engine/gameState';
 
 // Valid quest types for validation
-const VALID_QUEST_TYPES: QuestType[] = ['diplomacy', 'itemRetrieval', 'subjugation', 'escort'];
+const VALID_QUEST_TYPES: QuestType[] = ['diplomacy', 'itemRetrieval', 'subjugation', 'crafting'];
 
 /**
  * Parse quest text using the LLM via OpenRouter with structured output.

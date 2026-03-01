@@ -15,7 +15,7 @@
  * Run: npx ts-node src/test_gameloop.ts
  */
 
-import { createPatron, createOneOfEach } from './core/engine/patronFactory';
+import { createPatron } from './core/engine/patronFactory';
 import { parseQuestText, analyzeQuestVerbosity } from './core/engine/questFactory';
 import { resolveQuest } from './core/math/probability';
 import { gameState } from './core/engine/gameState';
@@ -138,7 +138,10 @@ function main(): void {
 
     subheader('Phase 2: Patron Generation (All 9 Archetypes)');
 
-    const patrons = createOneOfEach();
+    const patrons = [];
+    for (let i = 0; i < 9; i++) {
+        patrons.push(createPatron());
+    }
     for (let i = 0; i < patrons.length; i++) {
         printPatron(patrons[i], i);
         gameState.addPatron(patrons[i]);
@@ -219,8 +222,8 @@ function main(): void {
     subheader('Phase 8: Probability — Nekomimi Geisha vs Dwarven Miner (Mining)');
 
     const miningQuest = parseQuestText('Mine ore');
-    const geisha = createPatron('Nekomimi Geisha');
-    const miner = createPatron('Dwarven Miner');
+    const geisha = createPatron('nekomimi', 'geisha');
+    const miner = createPatron('dwarven', 'miner');
 
     console.log(`\n  Quest: "${miningQuest.originalText}" (D=${miningQuest.difficultyScalar})`);
     printSkills('  Reqs', miningQuest.requirements);

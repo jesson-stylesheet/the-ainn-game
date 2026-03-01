@@ -4,7 +4,7 @@
  * ═══════════════════════════════════════════════════════════════════════
  * Cold math. Sigmoid resolution. The LLM never touches this.
  *
- * P(Success) = 1 / (1 + Math.exp(-(S - D + γ * (Rd20 - 10.5))))
+ * P(Success) = 1 / (1 + Math.exp(-(S - D + γ * (Rd20 - 10.5)) / T))
  *
  * Where S is the patron's "coverage score" against the quest requirements.
  * The coverage score uses min(patron, req) to measure how well the
@@ -22,7 +22,7 @@ import {
     ItemCategory,
     IItem,
 } from '../types/entity';
-import { GAMMA } from '../constants';
+import { GAMMA, SIGMOID_TEMPERATURE } from '../constants';
 import { rollD20 } from '../engine/utils';
 
 // ── Coverage Score ──────────────────────────────────────────────────────
@@ -133,7 +133,9 @@ export function extractWeakestTags(
     for (const tag of ALL_SKILL_TAGS) {
         if (questReqs[tag] > 0) {
             const gap = questReqs[tag] - patronSkills[tag];
-            gaps.push({ tag, gap });
+            if (gap > 0) {
+                gaps.push({ tag, gap });
+            }
         }
     }
 
@@ -149,16 +151,17 @@ export function extractWeakestTags(
  * Resolve a quest outcome using the Sigmoid probability function.
  *
  * The formula:
- *   P(Success) = 1 / (1 + e^(-(S - D + γ*(Rd20 - 10.5))))
+ *   P(Success) = 1 / (1 + e^(-(S - D + γ*(Rd20 - 10.5)) / T))
  *
  * Where:
- *   S  = coverage score (sum of min(patronSkill, questReq) for each skill)
- *   D  = quest difficulty scalar (10–50)
- *   γ  = chaos coefficient (0.2)
+ *   S    = coverage score (sum of min(patronSkill, questReq) for each skill)
+ *   D    = quest difficulty scalar (10–50)
+ *   γ    = chaos coefficient (1.50) — amplifies d20 influence
+ *   T    = sigmoid temperature (≈4.84, derived) — flattens the curve
  *   Rd20 = random 1–20 roll
  *
- * When S ≈ D, probability is ~50%. When S >> D, near certain success.
- * When S << D, near certain failure.
+ * When S = D: d20=20 → 95%, d20=1 → 5%, d20=10 → ~46%.
+ * When S >> D, near certain success. When S << D, near certain failure.
  */
 export function resolveQuest(patron: IPatron, quest: IQuest): QuestResolutionResult {
     let coverageScore = computeCoverageScore(patron.skills, quest.requirements);
@@ -171,7 +174,7 @@ export function resolveQuest(patron: IPatron, quest: IQuest): QuestResolutionRes
     const D = quest.difficultyScalar;
 
     // The Sigmoid
-    const exponent = -(coverageScore - D + GAMMA * (d20 - 10.5));
+    const exponent = -(coverageScore - D + GAMMA * (d20 - 10.5)) / SIGMOID_TEMPERATURE;
     const probability = 1 / (1 + Math.exp(exponent));
 
     // Fate roll

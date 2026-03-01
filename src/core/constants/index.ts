@@ -12,7 +12,23 @@ export const TICK_MULTIPLIER = 3600;
 export const TICK_INTERVAL_MS = 1000;
 
 /** The Chaos Coefficient — amplifies the d20 roll's influence on quest outcomes. */
-export const GAMMA = 0.2;
+export const GAMMA = 1.50;
+
+/**
+ * Sigmoid Temperature — controls the steepness of the probability curve.
+ * Derived from GAMMA so that when S = D (even match):
+ *   d20 = 20 → P = 95%  (nat 20 nearly guarantees success)
+ *   d20 = 1  → P = 5%   (nat 1 nearly guarantees failure)
+ *   d20 = 10 → P ≈ 46%  (average roll, coin flip territory)
+ *
+ * The math: P(d20=20) = 0.95 requires γ*9.5/T = ln(19), so T = 9.5γ/ln(19).
+ *
+ * Current value ≈ 4.84.
+ *   S=30 D=33 d20=7  → ~15%    (slightly under-qualified, bad roll)
+ *   S=30 D=33 d20=12 → ~46%    (slightly under-qualified, decent roll)
+ *   S >> D     d20=any → >98%   (perfect match, always succeeds)
+ */
+export const SIGMOID_TEMPERATURE = (9.5 * GAMMA) / Math.log(19);
 
 /** Minimum stat value for any non-omitted skill after RNG variance. */
 export const MIN_STAT = 1;
