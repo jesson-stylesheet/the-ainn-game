@@ -70,6 +70,7 @@ export interface IItem {
     equippedSlot?: EquipmentSlot | null; // If worn by the patron
     location: ItemLocation;  // Where this item currently lives
     sourceQuestId?: string | null; // Quest that produced this item
+    craftedByPatronId?: string | null; // If crafted, who crafted it
 }
 
 export type PatronEquipment = Record<EquipmentSlot, IItem | null>;
@@ -126,13 +127,19 @@ export interface IQuest {
     status: QuestStatus;
     deadlineTimestamp: number;    // Unix epoch (ms)
 
-    // Valid only if QuestType is 'itemRetrieval'
+    // Valid only if QuestType is 'itemRetrieval' or 'crafting'
     itemDetails?: {
         itemName: string;
         category: ItemCategory;
         quantity: number;
         rarity: number;           // 0.00 (common) to 100.00 (unique)
     };
+
+    // Valid only if QuestType is 'crafting'
+    consumedItems?: {
+        itemName: string;
+        quantity: number;
+    }[];
 }
 
 // ── Quest Resolution Result ─────────────────────────────────────────────

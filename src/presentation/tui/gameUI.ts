@@ -214,6 +214,10 @@ async function postQuest(rl: readline.Interface): Promise<void> {
         const rarityColor = r >= 85 ? C.magenta : r >= 60 ? C.yellow : r >= 30 ? C.cyan : C.green;
         console.log(`    📦 ${quest.itemDetails.quantity}x ${C.bright}${quest.itemDetails.itemName}${C.reset} ${rarityColor}(Rarity: ${r.toFixed(2)})${C.reset}`);
     }
+    if (quest.consumedItems) {
+        const matStr = quest.consumedItems.map(c => `${c.quantity}x ${c.itemName}`).join(', ');
+        console.log(`    🔨 ${C.red}Requires:${C.reset} ${matStr}`);
+    }
     printSkills(quest.requirements, '    ');
 }
 
@@ -301,7 +305,13 @@ function printCharacterSheet(p: IPatron): void {
         if (item) {
             hasAny = true;
             const { label: rl, color: rc } = getRarityLabel(item.rarity);
-            console.log(`  ${C.gray}║${C.reset}  ${icon}${C.dim}${label}${C.reset} ${C.bright}${item.name}${C.reset} ${rc}[${rl}]${C.reset}`);
+            let suffix = '';
+            if (item.craftedByPatronId) {
+                const crafter = gameState.getPatron(item.craftedByPatronId);
+                const crafterName = crafter ? crafter.name : 'Unknown';
+                suffix = ` ${C.magenta}(Crafted by ${crafterName})${C.reset}`;
+            }
+            console.log(`  ${C.gray}║${C.reset}  ${icon}${C.dim}${label}${C.reset} ${C.bright}${item.name}${C.reset} ${rc}[${rl}]${C.reset}${suffix}`);
         } else {
             console.log(`  ${C.gray}║${C.reset}  ${icon}${C.dim}${label} — empty —${C.reset}`);
         }
@@ -341,9 +351,26 @@ function viewQuests(): void {
         if (q.itemDetails) {
             const r = q.itemDetails.rarity;
             const rarityColor = r >= 85 ? C.magenta : r >= 60 ? C.yellow : r >= 30 ? C.cyan : C.green;
-            detailLine += ` | 📦 ${q.itemDetails.quantity}x ${C.bright}${q.itemDetails.itemName}${C.reset} ${rarityColor}(R:${r.toFixed(1)})${C.reset}`;
+            const prefix = q.type === 'crafting' ? '✨' : '📦';
+            detailLine += ` | ${prefix} ${q.itemDetails.quantity}x ${C.bright}${q.itemDetails.itemName}${C.reset} ${rarityColor}(R:${r.toFixed(1)})${C.reset}`;
         }
         console.log(detailLine);
+        if (q.consumedItems) {
+            const innInv = gameState.getInnInventory();
+            let missingStr: string[] = [];
+            for (const req of q.consumedItems) {
+                const total = innInv.filter(item => item.name.toLowerCase() === req.itemName.toLowerCase()).reduce((sum, item) => sum + item.quantity, 0);
+                if (total < req.quantity) {
+                    missingStr.push(`${req.quantity - total}x ${req.itemName}`);
+                }
+            }
+            if (missingStr.length > 0) {
+                console.log(`      🔨 ${C.red}Missing:${C.reset} ${missingStr.join(', ')}`);
+            } else {
+                const matStr = q.consumedItems.map(c => `${c.quantity}x ${c.itemName}`).join(', ');
+                console.log(`      🔨 ${C.red}Uses:${C.reset} ${matStr}`);
+            }
+        }
         printSkills(q.requirements, '      ');
     }
 }
@@ -384,6 +411,25 @@ async function assignPatron(rl: readline.Interface): Promise<void> {
 
     const patron = availablePatrons[pIdx];
     const quest = postedQuests[qIdx];
+
+    // Explicit check for crafting material shortages so we can print a good error
+    if (quest.type === 'crafting' && quest.consumedItems) {
+        const innInv = gameState.getInnInventory();
+        let missing = false;
+        let missingStr: string[] = [];
+        for (const req of quest.consumedItems) {
+            const total = innInv.filter(i => i.name.toLowerCase() === req.itemName.toLowerCase()).reduce((sum, i) => sum + i.quantity, 0);
+            if (total < req.quantity) {
+                missing = true;
+                missingStr.push(`${req.quantity - total}x ${req.itemName}`);
+            }
+        }
+        if (missing) {
+            console.log(`  ${C.red}✗ Cannot assign: missing crafting materials (${missingStr.join(', ')}).${C.reset}`);
+            return;
+        }
+    }
+
     const ok = gameState.assignPatronToQuest(patron.id, quest.id);
 
     if (ok) {
@@ -516,7 +562,13 @@ function viewLedger(): void {
         const equippable = CATEGORY_TO_SLOT[item.category] !== null;
         const equipTag = equippable ? `${C.cyan}⚔${C.reset}` : `${C.dim}·${C.reset}`;
 
-        console.log(`  ${equipTag} ${C.bright}${item.quantity}x${C.reset} ${item.name.padEnd(22)} ${C.dim}${catDisplay.padEnd(16)}${C.reset} ${rarityColor}[${rarityLabel}] (R:${item.rarity.toFixed(1)})${C.reset}`);
+        let suffix = '';
+        if (item.craftedByPatronId) {
+            const crafter = gameState.getPatron(item.craftedByPatronId);
+            const crafterName = crafter ? crafter.name : 'Unknown';
+            suffix = ` ${C.magenta}(Crafted by ${crafterName})${C.reset}`;
+        }
+        console.log(`  ${equipTag} ${C.bright}${item.quantity}x${C.reset} ${item.name.padEnd(22)} ${C.dim}${catDisplay.padEnd(16)}${C.reset} ${rarityColor}[${rarityLabel}] (R:${item.rarity.toFixed(1)})${C.reset}${suffix}`);
     }
     console.log(`\n  ${C.dim}⚔ = equippable  · = not equippable${C.reset}`);
 }

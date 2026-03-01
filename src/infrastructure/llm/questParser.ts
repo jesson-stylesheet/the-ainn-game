@@ -28,7 +28,15 @@ const VALID_QUEST_TYPES: QuestType[] = ['diplomacy', 'itemRetrieval', 'subjugati
  */
 export async function parseQuestWithLLM(text: string): Promise<IQuest> {
     try {
-        const response = await parseQuestStructured(text);
+        const innItems = gameState.getInnInventory();
+        let inventoryContext = '';
+        if (innItems.length > 0) {
+            const summary = new Map<string, number>();
+            innItems.forEach(i => summary.set(i.name, (summary.get(i.name) || 0) + i.quantity));
+            inventoryContext = Array.from(summary.entries()).map(([k, v]) => `- ${v}x ${k}`).join('\n');
+        }
+
+        const response = await parseQuestStructured(text, inventoryContext);
 
         // ── Legitimacy Check ───────────────────────────────────────────
         if (response.isLegitimate === false) {
@@ -78,7 +86,9 @@ export async function parseQuestWithLLM(text: string): Promise<IQuest> {
 
         // Build item details if applicable
         let itemDetails: IQuest['itemDetails'] = undefined;
-        if (questType === 'itemRetrieval' && response.itemDetails) {
+        let consumedItems: IQuest['consumedItems'] = undefined;
+
+        if ((questType === 'itemRetrieval' || questType === 'crafting') && response.itemDetails) {
             const rarity = Math.max(0, Math.min(100, response.itemDetails.rarity ?? 0));
             const quantity = Math.max(1, Math.round(response.itemDetails.quantity ?? 1));
             let itemName = response.itemDetails.itemName || 'unknown item';
@@ -102,6 +112,13 @@ export async function parseQuestWithLLM(text: string): Promise<IQuest> {
             difficulty = Math.min(50, difficulty);
         }
 
+        if (questType === 'crafting' && response.consumedItems && response.consumedItems.length > 0) {
+            consumedItems = response.consumedItems.map(i => ({
+                itemName: i.itemName,
+                quantity: Math.max(1, Math.round(i.quantity ?? 1)),
+            }));
+        }
+
         const now = Date.now();
 
         return {
@@ -116,6 +133,7 @@ export async function parseQuestWithLLM(text: string): Promise<IQuest> {
             status: 'POSTED',
             deadlineTimestamp: now + (DEFAULT_QUEST_DEADLINE_HOURS * TICK_MULTIPLIER * 1000),
             ...(itemDetails ? { itemDetails } : {}),
+            ...(consumedItems ? { consumedItems } : {}),
         };
     } catch (error) {
         console.warn(`⚠ LLM quest parsing failed:`, (error as Error).message);

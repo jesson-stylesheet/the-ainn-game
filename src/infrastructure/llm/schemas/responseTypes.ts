@@ -32,6 +32,10 @@ export interface QuestParseResult {
         quantity: number;
         rarity: number;
     } | null;
+    consumedItems: {
+        itemName: string;
+        quantity: number;
+    }[] | null;
     reasoning: string;
 }
 

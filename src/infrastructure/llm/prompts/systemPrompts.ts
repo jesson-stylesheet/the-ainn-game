@@ -67,9 +67,9 @@ ${SKILL_TAGS_CSV}
 
 Total skill budget: 20-35 regardless of tag count. Set unused skills to 0.
 
-## ITEM RETRIEVAL & RARITY (CRITICAL)
-If questType is "itemRetrieval":
-- Extract the itemName (what is being retrieved)
+## ITEM RETRIEVAL & CRAFTING (CRITICAL)
+If questType is "itemRetrieval" OR "crafting":
+- Extract the itemName (what is being retrieved/crafted)
 - Extract the quantity (how many, default 1)
 - Determine the RARITY score (0.00 to 100.00) based on worldbuilding context:
   - 0.00-10.00: Abundant (dirt, water, common fish, firewood)
@@ -80,7 +80,10 @@ If questType is "itemRetrieval":
   - 95.01-100.00: Legendary/Unique (the Holy Grail, a god's tear)
 - Rarity MUST scale difficulty: rarity > 80 → difficulty should be 35+
 
-If questType is NOT "itemRetrieval", set itemDetails to null.
+If questType is "crafting":
+- You will be provided the Inn's current inventory. You MUST select existing items from this inventory and specify them in 'consumedItems' to act as crafting ingredients. The rarer the crafted item, the more ingredients are needed. If the needed items don't exist in the inventory, use your best judgment to substitute or create a demanding ingredient list from what is available.
+
+If questType is NOT "itemRetrieval" OR "crafting", set itemDetails to null. If NOT "crafting", set consumedItems to null.
 
 ## DIFFICULTY (10-50)
 10-15: trivial | 16-25: standard | 26-35: dangerous | 36-45: legendary | 46-50: impossible

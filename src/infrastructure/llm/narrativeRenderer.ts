@@ -64,11 +64,12 @@ MATH:
 /**
  * Parse quest text using the LLM with structured output.
  */
-export async function parseQuestStructured(text: string): Promise<QuestParseResult> {
+export async function parseQuestStructured(text: string, inventoryContext: string = ''): Promise<QuestParseResult> {
+    const contextStr = inventoryContext ? `\n\nINN INVENTORY (for crafting quests MUST USE):\n${inventoryContext}` : '';
     return chatCompletionStructured<QuestParseResult>(
         [
             { role: 'system', content: QUEST_PARSER_SYSTEM_PROMPT },
-            { role: 'user', content: `Parse this quest:\n\n"${text}"` },
+            { role: 'user', content: `Parse this quest:\n\n"${text}"${contextStr}` },
         ],
         QUEST_PARSE_SCHEMA,
         { temperature: 0.2, maxTokens: 512 }

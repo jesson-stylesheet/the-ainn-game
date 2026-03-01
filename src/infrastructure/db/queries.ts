@@ -49,6 +49,7 @@ interface QuestRow {
     item_category: string | null;
     item_quantity: number | null;
     item_rarity: number | null;
+    consumed_items: { itemName: string; quantity: number }[] | null;
     created_at: string;
     updated_at: string;
 }
@@ -77,6 +78,7 @@ interface ItemRow {
     equipped_slot: string | null;
     location: string;
     source_quest_id: string | null;
+    crafted_by_patron_id: string | null;
     created_at: string;
 }
 
@@ -162,6 +164,7 @@ export async function insertItem(item: IItem): Promise<void> {
         equipped_slot: item.equippedSlot ?? null,
         location: item.location,
         source_quest_id: item.sourceQuestId ?? null,
+        crafted_by_patron_id: item.craftedByPatronId ?? null,
     });
     if (error) throw new Error(`Failed to insert item: ${error.message}`);
 }
@@ -213,6 +216,7 @@ function rowToItem(row: ItemRow): IItem {
         equippedSlot: row.equipped_slot as EquipmentSlot | null,
         location: row.location as ItemLocation,
         sourceQuestId: row.source_quest_id,
+        craftedByPatronId: row.crafted_by_patron_id,
     };
 }
 
@@ -307,6 +311,7 @@ export async function insertQuest(quest: IQuest, verbosityScore?: number): Promi
         item_category: quest.itemDetails?.category ?? null,
         item_quantity: quest.itemDetails?.quantity ?? null,
         item_rarity: quest.itemDetails?.rarity ?? null,
+        consumed_items: quest.consumedItems ?? null,
     });
     if (error) throw new Error(`Failed to insert quest: ${error.message}`);
 }
@@ -374,6 +379,9 @@ function rowToQuest(row: QuestRow): IQuest {
             quantity: row.item_quantity ?? 1,
             rarity: row.item_rarity ?? 0,
         };
+    }
+    if (row.consumed_items) {
+        quest.consumedItems = row.consumed_items;
     }
     return quest;
 }

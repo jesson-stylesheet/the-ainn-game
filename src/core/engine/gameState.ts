@@ -96,6 +96,22 @@ class GameState {
         if (quest.status !== 'POSTED') return false;
         if (quest.postedByPatronId && quest.postedByPatronId === patronId) return false; // Can't do your own quest
 
+        if (quest.type === 'crafting' && quest.consumedItems) {
+            // First check if we have enough of all required materials
+            for (const req of quest.consumedItems) {
+                const total = this.getInnInventory()
+                    .filter(i => i.name.toLowerCase() === req.itemName.toLowerCase())
+                    .reduce((sum, i) => sum + i.quantity, 0);
+                if (total < req.quantity) {
+                    return false; // Cannot assign, missing ingredients
+                }
+            }
+            // Then consume them permanently
+            for (const req of quest.consumedItems) {
+                this.consumeInnItem(req.itemName, req.quantity);
+            }
+        }
+
         patron.state = 'ON_QUEST';
         quest.assignedPatronId = patronId;
         quest.status = 'ACCEPTED';
@@ -133,8 +149,8 @@ class GameState {
         if (quest) {
             quest.status = result.success ? 'COMPLETED' : 'FAILED';
 
-            // Deposit extracted items into the Inn's ledger on success
-            if (result.success && quest.type === 'itemRetrieval' && quest.itemDetails) {
+            // Deposit extracted or crafted items into the Inn's ledger on success
+            if (result.success && (quest.type === 'itemRetrieval' || quest.type === 'crafting') && quest.itemDetails) {
                 const newItem: IItem = {
                     id: generateUUID(),
                     name: quest.itemDetails.itemName,
@@ -145,6 +161,7 @@ class GameState {
                     equippedSlot: null,
                     location: 'INN_VAULT',
                     sourceQuestId: quest.id,
+                    craftedByPatronId: quest.type === 'crafting' ? result.patronId : null,
                 };
                 this.addItem(newItem);
             }
@@ -197,6 +214,23 @@ class GameState {
     /** Returns the inn's own inventory (items in the vault). */
     getInnInventory(): IItem[] {
         return Array.from(this.items.values()).filter(i => i.location === 'INN_VAULT');
+    }
+
+    /** Permanently consumes an quantity of an item from the inn inventory. */
+    consumeInnItem(name: string, quantity: number): boolean {
+        const innItems = this.getInnInventory().filter(i => i.name.toLowerCase() === name.toLowerCase());
+        let needed = quantity;
+        for (const item of innItems) {
+            if (needed <= 0) break;
+            if (item.quantity <= needed) {
+                needed -= item.quantity;
+                this.items.delete(item.id);
+            } else {
+                item.quantity -= needed;
+                needed = 0;
+            }
+        }
+        return true;
     }
 
     /** Move an item from the inn to a patron's equipment slot. */

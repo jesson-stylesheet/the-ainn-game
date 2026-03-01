@@ -102,12 +102,25 @@ export const QUEST_PARSE_SCHEMA = {
                 required: ['itemName', 'category', 'quantity', 'rarity'],
                 additionalProperties: false,
             },
+            consumedItems: {
+                type: ['array', 'null'],
+                description: 'ONLY populated if questType is crafting. A list of items from the Inn Inventory required to craft the new item. Otherwise null.',
+                items: {
+                    type: 'object',
+                    properties: {
+                        itemName: { type: 'string', description: 'Exact name of the item from the Inn Inventory.' },
+                        quantity: { type: 'number', description: 'Amount of this item to consume. Rare crafted items demand more ingredients.' }
+                    },
+                    required: ['itemName', 'quantity'],
+                    additionalProperties: false
+                }
+            },
             reasoning: {
                 type: 'string',
                 description: 'Brief explanation of tag choices and verbosity assessment.',
             },
         },
-        required: ['isLegitimate', 'rejectionReason', 'questType', 'skills', 'difficulty', 'resolutionTicks', 'itemDetails', 'reasoning'],
+        required: ['isLegitimate', 'rejectionReason', 'questType', 'skills', 'difficulty', 'resolutionTicks', 'itemDetails', 'consumedItems', 'reasoning'],
         additionalProperties: false,
     },
 };
