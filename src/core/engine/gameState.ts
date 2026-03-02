@@ -201,6 +201,8 @@ class GameState {
                 }
             }
         }
+
+        eventBus.emit('item:added', { item });
     }
 
     getItem(id: string): IItem | undefined {

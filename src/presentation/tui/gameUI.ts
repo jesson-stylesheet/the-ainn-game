@@ -18,6 +18,8 @@ import { eventBus } from '../../core/engine/eventBus';
 import { loreChronicle } from '../../core/engine/loreChronicle';
 import { ticker } from '../../core/engine/ticker';
 import { resolveQuest } from '../../core/math/probability';
+import { syncAdapter } from '../../infrastructure/db/syncAdapter';
+import { narrativeWorker } from '../../core/engine/narrativeWorker';
 import type { SkillTag, IPatron, IQuest, QuestResolutionResult, ItemCategory, EquipmentSlot } from '../../core/types/entity';
 import { ALL_SKILL_TAGS } from '../../core/types/entity';
 import * as db from '../../infrastructure/db/queries';
@@ -73,7 +75,7 @@ function showMenu(): void {
     console.log(`    ${C.cyan}2${C.reset} View Patrons          ${C.cyan}7${C.reset} View Inn Ledger`);
     console.log(`    ${C.cyan}3${C.reset} View Quest Board      ${C.cyan}8${C.reset} Summon New Patron`);
     console.log(`    ${C.cyan}4${C.reset} Assign Patron         ${C.cyan}9${C.reset} Toggle LLM/DB`);
-    console.log(`    ${C.cyan}5${C.reset} Resolve All Quests    ${C.cyan}E${C.reset} Equip Patron`);
+    console.log(`    ${C.cyan}5${C.reset} Check/FastForward Quests  ${C.cyan}E${C.reset} Equip Patron`);
     console.log(`    ${C.cyan}G${C.reset} Summon Lore Guardian (${loreChronicle.unacknowledgedEntriesCount}/${GUARDIAN_THRESHOLD})`);
     console.log(`    ${C.cyan}I${C.reset} Populate Inn (All 9) / ${C.cyan}0${C.reset} Exit`);
     console.log('');
@@ -447,77 +449,42 @@ async function assignPatron(rl: readline.Interface): Promise<void> {
     }
 }
 
-async function resolveAll(): Promise<void> {
+async function checkQuestProgress(rl: readline.Interface): Promise<void> {
     const accepted = gameState.getQuestsByStatus('ACCEPTED');
     if (accepted.length === 0) {
-        console.log(`\n  ${C.dim}No accepted quests to resolve.${C.reset}`);
+        console.log(`\n  ${C.dim}No quests currently in progress.${C.reset}`);
         return;
     }
 
-    console.log(`\n  ${C.bright}⚔ Resolving ${accepted.length} quest(s)...${C.reset}\n`);
+    console.log(`\n  ${C.bright}⏳ Active Quest Progress${C.reset}\n`);
 
     for (const quest of accepted) {
-        if (!quest.assignedPatronId) continue;
-        const patron = gameState.getPatron(quest.assignedPatronId);
-        if (!patron) continue;
+        const patron = quest.assignedPatronId ? gameState.getPatron(quest.assignedPatronId) : null;
+        const pName = patron ? patron.name : 'Unknown';
 
-        const result = resolveQuest(patron, quest);
-        gameState.recordResolution(result);
+        const maxTicks = 20;
+        const remaining = Math.max(0, quest.resolutionTicks);
+        const progress = Math.max(0, maxTicks - remaining);
 
-        // Display math result
-        const sc = result.success ? C.green : C.red;
-        const st = result.success ? '✅' : '❌';
-        console.log(`  ${st} ${sc}${result.success ? 'SUCCESS' : 'FAILED'}${C.reset} — "${quest.originalText.slice(0, 50)}..."`);
-        console.log(`     ${patron.name} | Coverage: ${result.dotProduct} vs D=${quest.difficultyScalar} | d20=${result.d20Roll} | P=${(result.probability * 100).toFixed(1)}%`);
+        const filled = Math.round((progress / maxTicks) * 20);
+        const empty = Math.max(0, 20 - filled);
+        const bar = `${C.green}${'█'.repeat(filled)}${C.dim}${'░'.repeat(empty)}${C.reset}`;
 
-        if (result.weakestTags.length > 0) {
-            console.log(`     Weak: ${result.weakestTags.map(t => `${C.red}${t}${C.reset}`).join(', ')}`);
+        console.log(`  ${C.cyan}[${quest.type}]${C.reset} "${quest.originalText.slice(0, 40)}..."`);
+        console.log(`      ${C.magenta}${pName}${C.reset} | Ticks Left: ${C.bright}${remaining}${C.reset}  [${bar}]`);
+    }
+    console.log('');
+
+    const answer = await askQuestion(rl, `  ${C.yellow}Fast-forward all active quests to completion? (y/N): ${C.reset}`);
+    if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
+        let count = 0;
+        for (const quest of accepted) {
+            quest.resolutionTicks = 0;
+            count++;
         }
-
-        // LLM: Generate structured resolution (story + lore + health in one call)
-        console.log(`\n     ${C.dim}📖 Generating tale...${C.reset}`);
-        const resolution = await renderResolution(result, patron, quest);
-
-        // Display the short story
-        console.log(`\n     ${C.bright}${C.cyan}══ The Tale ══${C.reset}`);
-        const storyLines = wordWrap(resolution.story, 70);
-        for (const line of storyLines) {
-            console.log(`     ${C.white}${line}${C.reset}`);
-        }
-        console.log(`     ${C.cyan}══════════════${C.reset}`);
-
-        // Update patron health
-        patron.healthStatus = resolution.patron_health;
-        if (resolution.patron_health === 'DEAD') {
-            patron.state = 'DEAD';
-        }
-        const healthColor = resolution.patron_health === 'HEALTHY' ? C.green :
-            resolution.patron_health === 'INJURED' ? C.yellow : C.red;
-        console.log(`     ${healthColor}♥ ${patron.name}: ${resolution.patron_health}${C.reset}${resolution.injury_description ? ` — ${C.dim}${resolution.injury_description}${C.reset}` : ''}`);
-
-        // Record lore
-        loreChronicle.recordResolution(quest, patron, result, resolution.lore_entry, resolution.story);
-        console.log(`     ${C.gray}📚 Lore: ${resolution.lore_entry.slice(0, 80)}...${C.reset}`);
-
-        // DB sync
-        if (useDB) {
-            try {
-                await db.updateQuestStatus(quest.id, result.success ? 'COMPLETED' : 'FAILED', result);
-                await db.updatePatronState(patron.id, resolution.patron_health === 'DEAD' ? 'DEAD' : (result.success ? 'LOUNGING' : 'IDLE'));
-                await db.insertLoreEntry({
-                    questId: quest.id,
-                    originalText: quest.originalText,
-                    outcome: result.success ? 'COMPLETED' : 'FAILED',
-                    patronName: patron.name,
-                    patronArchetype: patron.archetype,
-                    narrativeSeed: resolution.lore_entry,
-                });
-            } catch (e) {
-                console.log(`     ${C.red}DB sync: ${(e as Error).message}${C.reset}`);
-            }
-        }
-
-        console.log('');
+        console.log(`\n  ${C.green}▶ Fast-forwarded ${count} quest(s). They will resolve on the next tick.${C.reset}`);
+        // Force an immediate tick to harvest them right now
+        ticker.tick();
     }
 }
 
@@ -834,6 +801,12 @@ export async function startTUI(): Promise<void> {
         output: process.stdout,
     });
 
+    // Start the game loop automatically
+    ticker.start();
+
+    // Initialize background LLM processor
+    narrativeWorker.init();
+
     // Subscribe to events for logging
     eventBus.on('patron:arrived', ({ patron }) => {
         // Silently logged — TUI handles display
@@ -842,6 +815,36 @@ export async function startTUI(): Promise<void> {
     eventBus.on('lore:guardian_arrived', ({ recentLore }) => {
         // Since we want to interrupt politely via the TUI, we handle the 
         // trigger explicitly within the loop rather than randomly via the event bus.
+    });
+
+    // Wire up events that would previously happen inside resolveAll
+    eventBus.on('quest:resolved', ({ result, patron, quest }) => {
+        const sc = result.success ? C.green : C.red;
+        const st = result.success ? '✅' : '❌';
+        console.log(`\n  ${st} ${sc}${result.success ? 'SUCCESS' : 'FAILED'}${C.reset} — "${quest.originalText.slice(0, 50)}..."`);
+        console.log(`     ${patron.name} | Coverage: ${result.dotProduct} vs D=${quest.difficultyScalar} | d20=${result.d20Roll} | P=${(result.probability * 100).toFixed(1)}%`);
+        if (result.weakestTags.length > 0) {
+            console.log(`     Weak: ${result.weakestTags.map(t => `${C.red}${t}${C.reset}`).join(', ')}`);
+        }
+        console.log(`     ${C.dim}📖 Generating tale in background...${C.reset}\n`);
+        rl.prompt(true);
+    });
+
+    eventBus.on('narrative:completed', (data) => {
+        const patronName = gameState.getPatron(data.patronId)?.name || 'Unknown';
+        console.log(`\n     ${C.bright}${C.cyan}══ The Tale of ${patronName} ══${C.reset}`);
+        const storyLines = wordWrap(data.story, 70);
+        for (const line of storyLines) {
+            console.log(`     ${C.white}${line}${C.reset}`);
+        }
+        console.log(`     ${C.cyan}═══════════════════════════════${C.reset}`);
+
+        const healthColor = data.patronHealth === 'HEALTHY' ? C.green :
+            data.patronHealth === 'INJURED' ? C.yellow : C.red;
+
+        console.log(`     ${healthColor}♥ ${patronName}: ${data.patronHealth}${C.reset}${data.injuryDescription ? ` — ${C.dim}${data.injuryDescription}${C.reset}` : ''}`);
+        console.log(`     ${C.gray}📚 Lore: ${data.loreEntry.slice(0, 80)}...${C.reset}\n`);
+        rl.prompt(true);
     });
 
     banner();
@@ -865,7 +868,7 @@ export async function startTUI(): Promise<void> {
             case '2': await viewPatrons(rl); break;
             case '3': viewQuests(); break;
             case '4': await assignPatron(rl); break;
-            case '5': await resolveAll(); break;
+            case '5': await checkQuestProgress(rl); break;
             case '6': viewLore(); break;
             case '7': viewLedger(); break;
             case '8': await summonPatron(rl); break;

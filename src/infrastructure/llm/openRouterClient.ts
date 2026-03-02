@@ -59,6 +59,7 @@ export interface LLMOptions {
     model?: string;
     temperature?: number;
     maxTokens?: number;
+    timeoutMs?: number;
 }
 
 // ── Core API Call (free-form text) ───────────────────────────────────────
@@ -78,6 +79,7 @@ export async function chatCompletion(
         model = DEFAULT_MODEL,
         temperature = 0.3,
         maxTokens = 1024,
+        timeoutMs = 60000,
     } = options;
 
     const response = await fetch(OPENROUTER_BASE_URL, {
@@ -94,6 +96,7 @@ export async function chatCompletion(
             temperature,
             max_tokens: maxTokens,
         }),
+        signal: AbortSignal.timeout(timeoutMs),
     });
 
     if (!response.ok) {
@@ -132,6 +135,7 @@ export async function chatCompletionStructured<T>(
         model = DEFAULT_MODEL,
         temperature = 0.3,
         maxTokens = 1024,
+        timeoutMs = 60000,
     } = options;
 
     const response = await fetch(OPENROUTER_BASE_URL, {
@@ -152,6 +156,7 @@ export async function chatCompletionStructured<T>(
                 json_schema: jsonSchema,
             },
         }),
+        signal: AbortSignal.timeout(timeoutMs),
     });
 
     if (!response.ok) {

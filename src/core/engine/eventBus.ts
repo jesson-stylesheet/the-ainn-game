@@ -7,7 +7,7 @@
  */
 
 import { EventEmitter } from 'events';
-import type { IPatron, IQuest, QuestResolutionResult } from '../types/entity';
+import type { IPatron, IQuest, QuestResolutionResult, IItem } from '../types/entity';
 
 // ── Event Map ───────────────────────────────────────────────────────────
 
@@ -17,6 +17,16 @@ export interface GameEvents {
     'quest:posted': { quest: IQuest };
     'quest:accepted': { quest: IQuest; patron: IPatron };
     'quest:resolved': { result: QuestResolutionResult; patron: IPatron; quest: IQuest };
+    'item:added': { item: IItem };
+    'narrative:completed': {
+        questId: string;
+        patronId: string;
+        success: boolean;
+        story: string;
+        loreEntry: string;
+        patronHealth: string;
+        injuryDescription?: string;
+    };
     'tick': { simulatedTime: number; tickCount: number };
     'engine:started': { startTime: number };
     'engine:stopped': { stopTime: number };
