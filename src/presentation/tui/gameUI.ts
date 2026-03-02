@@ -738,10 +738,10 @@ async function summonPatron(rl: readline.Interface): Promise<void> {
         // User picked a specific Job, race is still fully random.
         // We need to parse the job string to the type expected by createPatron (lowercase)
         const jobKey = jobs[choice - 1].toLowerCase() as any;
-        patron = createPatron(undefined, jobKey);
+        patron = createPatron(undefined, jobKey, gameState.reputation);
     } else {
         // Fully random
-        patron = createPatron();
+        patron = createPatron(undefined, undefined, gameState.reputation);
     }
 
     gameState.addPatron(patron);
@@ -764,7 +764,7 @@ async function summonPatron(rl: readline.Interface): Promise<void> {
 async function populateInn(): Promise<void> {
     console.log(`\n  ${C.bright}Summoning 9 random patrons using CSV matrix...${C.reset}\n`);
     for (let i = 0; i < 9; i++) {
-        const p = createPatron();
+        const p = createPatron(undefined, undefined, gameState.reputation);
         gameState.addPatron(p);
         console.log(`  ${C.green}✓${C.reset} ${C.magenta}${p.name}${C.reset} (${p.archetype})`);
 

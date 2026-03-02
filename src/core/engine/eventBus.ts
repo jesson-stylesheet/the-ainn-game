@@ -31,6 +31,7 @@ export interface GameEvents {
     'engine:started': { startTime: number };
     'engine:stopped': { stopTime: number };
     'lore:guardian_arrived': { recentLore: string };
+    'inn:reputation_gained': { amount: number, total: number };
 }
 
 export type GameEventName = keyof GameEvents;

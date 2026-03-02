@@ -149,6 +149,13 @@ class GameState {
         if (quest) {
             quest.status = result.success ? 'COMPLETED' : 'FAILED';
 
+            // Gain reputation on successful subjugation
+            if (result.success && quest.type === 'subjugation') {
+                const repGain = Math.max(1, Math.floor(quest.difficultyScalar / 5));
+                this._reputation += repGain;
+                eventBus.emit('inn:reputation_gained', { amount: repGain, total: this._reputation });
+            }
+
             // Deposit extracted or crafted items into the Inn's ledger on success
             if (result.success && (quest.type === 'itemRetrieval' || quest.type === 'crafting') && quest.itemDetails) {
                 const newItem: IItem = {

@@ -10,6 +10,7 @@
 
 import { parseQuestWithLLM } from './infrastructure/llm/questParser';
 import { createPatron } from './core/engine/patronFactory';
+import { gameState } from './core/engine/gameState';
 import {
     resolveQuest,
     computeCoverageScore,
@@ -104,7 +105,7 @@ async function runTests(): Promise<void> {
 
         // Step 2: Create patron
         console.log(`\n  ── Step 2: Patron Creation ──`);
-        const patron = createPatron(...scenario.patronArchetype);
+        const patron = createPatron(...scenario.patronArchetype, gameState.reputation);
         console.log(`  Name: ${patron.name} (${patron.archetype})`);
         printSkillVector('Patron Skills', patron.skills);
 

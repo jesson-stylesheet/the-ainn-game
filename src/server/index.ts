@@ -69,7 +69,7 @@ app.post('/api/quests', async (req, res) => {
 app.post('/api/patrons', async (req, res) => {
     try {
         const { createPatron } = await import('../core/engine/patronFactory');
-        const patron = createPatron();
+        const patron = createPatron(undefined, undefined, gameState.reputation);
         gameState.addPatron(patron);
         res.status(201).json(patron);
     } catch (e) {

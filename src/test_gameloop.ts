@@ -140,7 +140,7 @@ function main(): void {
 
     const patrons = [];
     for (let i = 0; i < 9; i++) {
-        patrons.push(createPatron());
+        patrons.push(createPatron(undefined, undefined, gameState.reputation));
     }
     for (let i = 0; i < patrons.length; i++) {
         printPatron(patrons[i], i);
@@ -222,8 +222,8 @@ function main(): void {
     subheader('Phase 8: Probability — Nekomimi Geisha vs Dwarven Miner (Mining)');
 
     const miningQuest = parseQuestText('Mine ore');
-    const geisha = createPatron('nekomimi', 'geisha');
-    const miner = createPatron('dwarven', 'miner');
+    const geisha = createPatron('nekomimi', 'geisha', gameState.reputation);
+    const miner = createPatron('dwarven', 'miner', gameState.reputation);
 
     console.log(`\n  Quest: "${miningQuest.originalText}" (D=${miningQuest.difficultyScalar})`);
     printSkills('  Reqs', miningQuest.requirements);

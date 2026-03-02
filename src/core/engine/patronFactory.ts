@@ -208,18 +208,24 @@ function generatePatronName(race: Race): string {
 
 /**
  * Build a SkillVector by combining a Race blueprint and a Job blueprint.
- * Primary and Secondary skills get base rolls within their range.
+ * Primary and Secondary skills get base rolls within their range, scaled by reputation.
  * All non-zero stats then receive [-2, +2] variance, clamped to [1, 20].
  * Omitted stats remain exactly 0.
  */
-function buildSkillVector(raceBp: ArchetypeBlueprint, jobBp: ArchetypeBlueprint): SkillVector {
+function buildSkillVector(raceBp: ArchetypeBlueprint, jobBp: ArchetypeBlueprint, reputation: number = 0): SkillVector {
     const vector = createEmptySkillVector();
+
+    // Scale goes from 0.4 at 0 reputation to 1.0 at 200 reputation.
+    // Caps at 1.2 at 266+ rep to allow max stats even with bad variance.
+    const scale = Math.min(1.2, 0.4 + (reputation / 200) * 0.6);
 
     // Helper to add rolls to the vector
     const applyRolls = (skills: Partial<Record<SkillTag, [number, number]>>) => {
         for (const [tag, [min, max]] of Object.entries(skills)) {
             const skillTag = tag as SkillTag;
-            vector[skillTag] = (vector[skillTag] || 0) + rollInt(min, max);
+            const scaledMin = Math.max(1, Math.round(min * scale));
+            const scaledMax = Math.max(scaledMin, Math.round(max * scale));
+            vector[skillTag] = (vector[skillTag] || 0) + rollInt(scaledMin, scaledMax);
         }
     };
 
@@ -244,7 +250,7 @@ function buildSkillVector(raceBp: ArchetypeBlueprint, jobBp: ArchetypeBlueprint)
  * Instantiate a new patron. If specific race/job are omitted,
  * they are generated randomly based on the probability matrix.
  */
-export function createPatron(race?: Race, job?: Job): IPatron {
+export function createPatron(race?: Race, job?: Job, innReputation: number = 0): IPatron {
     let finalRace = race;
     let finalJob = job;
 
@@ -262,7 +268,7 @@ export function createPatron(race?: Race, job?: Job): IPatron {
         id: generateUUID(),
         name: generatePatronName(finalRace),
         archetype: archetypeName,
-        skills: buildSkillVector(raceBlueprint, jobBlueprint),
+        skills: buildSkillVector(raceBlueprint, jobBlueprint, innReputation),
         state: 'IDLE',
         healthStatus: 'HEALTHY',
         arrivalTimestamp: Date.now(),
