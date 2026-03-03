@@ -16,6 +16,21 @@ class GameState {
     private resolvedResults: QuestResolutionResult[] = [];
     private items: Map<string, IItem> = new Map();
 
+    // ── Multi-Tenancy Identifiers ───────────────────────────────────────
+    private _playerId: string = '';
+    private _worldId: string = '';
+    private _innId: string = '';
+
+    get playerId(): string { return this._playerId; }
+    get worldId(): string { return this._worldId; }
+    get innId(): string { return this._innId; }
+
+    setIdentifiers(playerId: string, worldId: string, innId: string) {
+        this._playerId = playerId;
+        this._worldId = worldId;
+        this._innId = innId;
+    }
+
     // ── Inn Global State ────────────────────────────────────────────────
     private _currentTick = 0;
     private _innGold = 100;

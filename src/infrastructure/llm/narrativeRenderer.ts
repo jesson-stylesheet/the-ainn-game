@@ -11,9 +11,10 @@ import type { IPatron, IQuest, QuestResolutionResult, PatronHealthStatus } from 
 import { ALL_SKILL_TAGS } from '../../core/types/entity';
 import { loreChronicle } from '../../core/engine/loreChronicle';
 import { CODEX_TOOLS, CODEX_HANDLERS } from './codexTools';
+import { searchCodexMobSemantic, searchCodexItemSemantic, searchCodexFactionSemantic } from '../db/queries';
 
 // ── Centralized imports ────────────────────────────────────────────────
-import { RESOLUTION_SYSTEM_PROMPT, getQuestParserSystemPrompt, ARRIVAL_SYSTEM_PROMPT, ITEM_DEDUP_SYSTEM_PROMPT, PATRON_QUEST_GEN_SYSTEM_PROMPT, GUARDIAN_QUESTION_PROMPT, GUARDIAN_SYNTHESIS_PROMPT } from './prompts/systemPrompts';
+import { RESOLUTION_SYSTEM_PROMPT, getQuestParserSystemPrompt, ARRIVAL_SYSTEM_PROMPT, ITEM_DEDUP_SYSTEM_PROMPT, PATRON_QUEST_GEN_SYSTEM_PROMPT, GUARDIAN_QUESTION_PROMPT, GUARDIAN_SYNTHESIS_PROMPT, CODEX_SYNC_SYSTEM_PROMPT } from './prompts/systemPrompts';
 import { RESOLUTION_SCHEMA, QUEST_PARSE_SCHEMA, ITEM_DEDUP_SCHEMA, GUARDIAN_QUESTION_SCHEMA } from './schemas/jsonSchemas';
 import type { ResolutionNarrative, QuestParseResult, ItemDedupResult, GuardianQuestionResult } from './schemas/responseTypes';
 import { getSkillBudgetForReputation } from '../../core/engine/utils';
@@ -54,6 +55,7 @@ MATH:
             ],
             RESOLUTION_SCHEMA,
             {
+                model: 'google/gemini-3-flash-preview',
                 temperature: 0.8,
                 maxTokens: 600,
                 tools: CODEX_TOOLS,
@@ -118,7 +120,7 @@ export async function deduplicateItemName(
                 },
             ],
             ITEM_DEDUP_SCHEMA,
-            { temperature: 0.1, maxTokens: 256 }
+            { model: 'google/gemini-2.5-flash', temperature: 0.1, maxTokens: 256 }
         );
 
         return {
@@ -150,6 +152,24 @@ export async function generatePatronQuest(
         .map(([k, v]) => `${k}:${v}`)
         .join(', ');
 
+    let codexContext = '';
+    try {
+        // Perform RAG lookups based on the patron's archetype and top skills
+        const ragQuery = `${patron.archetype} preparing for work involving ${topSkills}`;
+
+        const [mobs, items, factions] = await Promise.all([
+            searchCodexMobSemantic(ragQuery, 0.4, 2),
+            searchCodexItemSemantic(ragQuery, 0.4, 2),
+            searchCodexFactionSemantic(ragQuery, 0.4, 1)
+        ]);
+
+        if (mobs.length > 0) codexContext += `\nKNOWN MOBS (Threats, bounties):\n` + mobs.map(m => `- ${m.name}: ${m.description} (Danger: ${m.dangerLevel})`).join('\n');
+        if (items.length > 0) codexContext += `\nKNOWN ITEMS (Relics, loot, materials):\n` + items.map(i => `- ${i.name}: ${i.description} (Rarity: ${i.rarity})`).join('\n');
+        if (factions.length > 0) codexContext += `\nKNOWN FACTIONS (Employers, enemies):\n` + factions.map(f => `- ${f.name}: ${f.description}`).join('\n');
+    } catch (e) {
+        console.warn(`⚠ RAG Codex search failed during quest generation, proceeding without it:`, (e as Error).message);
+    }
+
     const userPrompt = `PATRON CHARACTER SHEET:
 Name: ${patron.name}
 Archetype: ${patron.archetype}
@@ -158,6 +178,7 @@ Top Skills: ${topSkills}
 
 RECENT WORLD LORE:
 ${loreContext || 'The inn has just opened. No tales yet.'}
+${codexContext ? `\nRELEVANT WORLD CODEX ENTITIES (Incorporate these into the quest if suitable):\n${codexContext}` : ''}
 
 Write a quest that this patron would post on the board.`;
 
@@ -167,7 +188,7 @@ Write a quest that this patron would post on the board.`;
                 { role: 'system', content: PATRON_QUEST_GEN_SYSTEM_PROMPT },
                 { role: 'user', content: userPrompt },
             ],
-            { temperature: 0.85, maxTokens: 256 }
+            { model: 'google/gemini-3-flash-preview', temperature: 0.85, maxTokens: 256 }
         );
     } catch {
         // Fallback: generic quest based on archetype
@@ -227,7 +248,14 @@ export async function generateGuardianQuestions(recentLore: string): Promise<Gua
                 { role: 'user', content: `RECENT LORE:\n\n${recentLore}` },
             ],
             GUARDIAN_QUESTION_SCHEMA,
-            { temperature: 0.8, maxTokens: 400 } // Slight bump in temp for creativity
+            {
+                model: 'google/gemini-3-flash-preview',
+                temperature: 0.8,
+                maxTokens: 400,
+                tools: CODEX_TOOLS,
+                toolHandlers: CODEX_HANDLERS,
+                tool_choice: 'auto'
+            } // Slight bump in temp for creativity
         );
     } catch (error) {
         console.warn(`⚠ Guardian questions failed, using fallback:`, (error as Error).message);
@@ -261,6 +289,7 @@ export async function synthesizeLore(recentLore: string, questions: string[], an
                 { role: 'user', content: prompt },
             ],
             {
+                model: 'google/gemini-3-flash-preview',
                 temperature: 0.9,
                 maxTokens: 500,
                 tools: CODEX_TOOLS,
@@ -271,6 +300,35 @@ export async function synthesizeLore(recentLore: string, questions: string[], an
     } catch (error) {
         console.warn(`⚠ Guardian synthesis failed, using fallback:`, (error as Error).message);
         return fallbackText;
+    }
+}
+
+// ── World Codex Synchroniser ──────────────────────────────────────────────
+
+/**
+ * Passively scans new lore entries and uses tools to register new entities (RAG).
+ * This runs in the background and uses gemini-2.5-flash for speed/structure.
+ */
+export async function syncCodexFromLore(loreEntry: string): Promise<void> {
+    if (!loreEntry || loreEntry.trim() === '') return;
+
+    try {
+        await chatCompletion(
+            [
+                { role: 'system', content: CODEX_SYNC_SYSTEM_PROMPT },
+                { role: 'user', content: `RECENT LORE ENTRY:\n\n"${loreEntry}"\n\nExtract and register any notable new entities using your tools.` }
+            ],
+            {
+                model: 'google/gemini-2.5-flash',
+                temperature: 0.1, // Low temperature for factual extraction
+                maxTokens: 500,
+                tools: CODEX_TOOLS,
+                toolHandlers: CODEX_HANDLERS,
+                tool_choice: 'auto'
+            }
+        );
+    } catch (error) {
+        console.warn(`⚠ Codex Sync failed:`, (error as Error).message);
     }
 }
 

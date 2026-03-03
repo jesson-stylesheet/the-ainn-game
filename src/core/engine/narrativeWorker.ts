@@ -8,7 +8,7 @@
  */
 
 import { eventBus } from './eventBus';
-import { renderResolution } from '../../infrastructure/llm/narrativeRenderer';
+import { renderResolution, syncCodexFromLore } from '../../infrastructure/llm/narrativeRenderer';
 import { loreChronicle } from './loreChronicle';
 import { gameState } from './gameState';
 
@@ -51,6 +51,11 @@ class NarrativeWorker {
                     loreEntry: resolution.lore_entry,
                     patronHealth: resolution.patron_health,
                     injuryDescription: resolution.injury_description,
+                });
+
+                // Spin up the background Codex Synchroniser to extract new RAG entities
+                syncCodexFromLore(resolution.story).catch(e => {
+                    console.error(`[NarrativeWorker] Background Codex Sync failed for ${quest.id}:`, e);
                 });
 
             } catch (error) {

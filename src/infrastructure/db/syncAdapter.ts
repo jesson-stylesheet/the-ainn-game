@@ -9,6 +9,7 @@
 import { eventBus } from '../../core/engine/eventBus';
 import * as db from './queries';
 import { gameState } from '../../core/engine/gameState';
+import async from 'async';
 
 class DBSyncAdapter {
     private initialized = false;
@@ -62,6 +63,14 @@ class DBSyncAdapter {
         }
     }
 
+    private dbQueue = async.queue(async (task: () => Promise<void>) => {
+        try {
+            await task();
+        } catch (e: any) {
+            console.error(`[DBSync] Task failed in queue:`, e.message);
+        }
+    }, 1);
+
     init(): void {
         if (this.initialized) return;
         this.initialized = true;
@@ -69,110 +78,116 @@ class DBSyncAdapter {
         const isDBEnabled = () => process.env.USE_DB === 'true' && !this.isHydrating; // Block outgoing sync if hydrating
 
         // ── Patrons
-        eventBus.on('patron:arrived', async ({ patron }) => {
+        eventBus.on('patron:arrived', ({ patron }) => {
             if (!isDBEnabled()) return;
-            try { await db.insertPatron(patron); }
-            catch (e) { console.error(`[DBSync] patron:arrived failed:`, e); }
+            this.dbQueue.push(async () => {
+                await db.insertPatron(patron);
+            });
         });
 
-        eventBus.on('patron:departed', async ({ patron }) => {
+        eventBus.on('patron:departed', ({ patron }) => {
             if (!isDBEnabled()) return;
-            try { await db.updatePatronState(patron.id, patron.state); }
-            catch (e) { console.error(`[DBSync] patron:departed failed:`, e); }
+            this.dbQueue.push(async () => {
+                await db.updatePatronState(patron.id, patron.state);
+            });
         });
 
         // ── Quests
-        eventBus.on('quest:posted', async ({ quest }) => {
+        eventBus.on('quest:posted', ({ quest }) => {
             if (!isDBEnabled()) return;
-            try {
+            this.dbQueue.push(async () => {
                 // Using 0 as a default verbosity score for background-posted quests
                 await db.insertQuest(quest, 0);
-            }
-            catch (e) { console.error(`[DBSync] quest:posted failed:`, e); }
+            });
         });
 
-        eventBus.on('quest:expired', async ({ quest }) => {
+        eventBus.on('quest:expired', ({ quest }) => {
             if (!isDBEnabled()) return;
-            try { await db.updateQuestStatus(quest.id, 'EXPIRED'); }
-            catch (e) { console.error(`[DBSync] quest:expired failed:`, e); }
+            this.dbQueue.push(async () => {
+                await db.updateQuestStatus(quest.id, 'EXPIRED');
+            });
         });
 
-        eventBus.on('quest:accepted', async ({ quest, patron }) => {
+        eventBus.on('quest:accepted', ({ quest, patron }) => {
             if (!isDBEnabled()) return;
-            try {
+            this.dbQueue.push(async () => {
                 await db.assignPatronToQuestAtomic(patron.id, quest.id);
 
                 // If it was a crafting quest, we must also update the DB to reflect consumed items.
                 if (quest.type === 'crafting' && quest.consumedItems) {
                     for (const req of quest.consumedItems) {
-                        await db.consumeInnItemFromDB(req.itemName, req.quantity);
+                        try {
+                            await db.consumeInnItemFromDB(req.itemName, req.quantity);
+                        } catch (e) {
+                            console.error(`[DBSync] consumeInnItemFromDB failed in queue:`, e);
+                        }
                     }
                 }
-            }
-            catch (e) { console.error(`[DBSync] quest:accepted failed:`, e); }
+            });
         });
 
         // Items
-        eventBus.on('item:added', async ({ item }) => {
+        eventBus.on('item:added', ({ item }) => {
             if (!isDBEnabled()) return;
-            try { await db.insertItem(item); }
-            catch (e) { console.error(`[DBSync] item:added failed:`, e); }
+            this.dbQueue.push(async () => {
+                await db.insertItem(item);
+            });
         });
 
         // ── Inn State
-        eventBus.on('inn:reputation_gained', async ({ total }) => {
+        eventBus.on('inn:reputation_gained', ({ total }) => {
             if (!isDBEnabled()) return;
-            try { await db.updateInnState({ reputation: total }); }
-            catch (e) { console.error(`[DBSync] inn:reputation_gained failed:`, e); }
+            this.dbQueue.push(async () => {
+                await db.updateInnState({ reputation: total });
+            });
         });
 
         // ── Narrative / Resolution
-        eventBus.on('narrative:completed', async (data) => {
+        eventBus.on('narrative:completed', (data) => {
             if (!isDBEnabled()) return;
-            try {
-                const quest = gameState.getQuest(data.questId);
-                const patron = gameState.getPatron(data.patronId);
+            this.dbQueue.push(async () => {
+                try {
+                    const quest = gameState.getQuest(data.questId);
+                    const patron = gameState.getPatron(data.patronId);
 
-                // 1. Update Quest Status
-                if (quest) {
-                    // Find the resolution result in GameState
-                    const result = gameState.getResolvedResults().find(r => r.questId === quest.id);
-                    if (result) {
-                        await db.updateQuestStatus(data.questId, quest.status, result);
+                    // 1. Update Quest Status
+                    if (quest) {
+                        // Find the resolution result in GameState
+                        const result = gameState.getResolvedResults().find(r => r.questId === quest.id);
+                        if (result) {
+                            await db.updateQuestStatus(data.questId, quest.status, result);
+                        }
                     }
+
+                    // 2. Update Patron State & Health
+                    if (patron) {
+                        await db.updatePatronState(patron.id, patron.state);
+                        await db.updatePatronHealth(patron.id, patron.healthStatus);
+                    }
+
+                    // 3. Insert Lore
+                    await db.insertLoreEntry({
+                        questId: data.questId,
+                        originalText: quest ? quest.originalText : 'Unknown Quest Text',
+                        outcome: data.success ? 'COMPLETED' : 'FAILED',
+                        patronName: patron ? patron.name : 'Unknown',
+                        patronArchetype: patron ? patron.archetype : 'Unknown',
+                        narrativeSeed: data.loreEntry
+                    });
+                } catch (e) {
+                    console.error(`[DBSync] narrative:completed failed in queue:`, e);
                 }
-
-                // 2. Update Patron State & Health
-                if (patron) {
-                    await db.updatePatronState(patron.id, patron.state);
-                    await db.updatePatronHealth(patron.id, patron.healthStatus);
-                }
-
-                // 3. Insert Lore
-                await db.insertLoreEntry({
-                    questId: data.questId,
-                    originalText: quest ? quest.originalText : 'Unknown Quest Text',
-                    outcome: data.success ? 'COMPLETED' : 'FAILED',
-                    patronName: patron ? patron.name : 'Unknown',
-                    patronArchetype: patron ? patron.archetype : 'Unknown',
-                    narrativeSeed: data.loreEntry
-                });
-
-            } catch (e) {
-                console.error(`[DBSync] narrative:completed failed:`, e);
-            }
+            });
         });
 
         // ── Ticker & Engine
-        eventBus.on('tick', async ({ simulatedTime }) => {
+        eventBus.on('tick', ({ simulatedTime }) => {
             if (!isDBEnabled()) return;
-            try {
-                // Periodically save the game clock tick (e.g. every 10 ticks to avoid DB spam)
-                if (gameState.currentTick % 10 === 0) {
+            // Periodically save the game clock tick (e.g. every 10 ticks to avoid DB spam)
+            if (gameState.currentTick % 10 === 0) {
+                this.dbQueue.push(async () => {
                     await db.tickGameClock(10);
-                }
-            } catch (e) {
-                console.error(`[DBSync] tick failed:`, e);
+                });
             }
         });
 

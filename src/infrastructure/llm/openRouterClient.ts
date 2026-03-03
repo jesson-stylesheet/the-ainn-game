@@ -76,6 +76,19 @@ export interface ToolDefinition {
     };
 }
 
+export interface EmbeddingResponse {
+    data: {
+        object: 'embedding';
+        embedding: number[];
+        index: number;
+    }[];
+    model: string;
+    usage: {
+        prompt_tokens: number;
+        total_tokens: number;
+    };
+}
+
 export type ToolHandlerRegistry = Record<string, (args: any) => Promise<any>>;
 
 export interface LLMOptions {
@@ -114,7 +127,10 @@ export async function chatCompletion(
     const messages = [...inputMessages];
 
     while (true) {
-        const body: any = { model, messages, temperature, max_tokens: maxTokens };
+        const body: any = {
+            model, messages, temperature, max_tokens: maxTokens,
+            provider: { order: ["Google"] }
+        };
         if (tools && tools.length > 0) {
             body.tools = tools;
             if (tool_choice) body.tool_choice = tool_choice;
@@ -208,7 +224,8 @@ export async function chatCompletionStructured<T>(
     while (true) {
         const body: any = {
             model, messages, temperature, max_tokens: maxTokens,
-            response_format: { type: 'json_schema', json_schema: jsonSchema }
+            response_format: { type: 'json_schema', json_schema: jsonSchema },
+            provider: { order: ["Google"] }
         };
         if (tools && tools.length > 0) {
             body.tools = tools;
@@ -279,4 +296,59 @@ export async function chatCompletionStructured<T>(
             throw new Error(`Failed to parse structured LLM response: ${cleaned.slice(0, 200)}`);
         }
     }
+}
+
+// ── Embeddings (RAG) ───────────────────────────────────────────────────
+
+/**
+ * Generate a vector embedding for a given text string.
+ * Uses 768 dimensions by default (compatible with google/text-embedding-004).
+ */
+export async function generateEmbedding(text: string, model: string = 'google/gemini-embedding-001'): Promise<number[]> {
+    if (!OPENROUTER_API_KEY) {
+        console.warn('⚠ OPENROUTER_API_KEY not set. Returning zero-vector.');
+        return new Array(768).fill(0);
+    }
+
+    const requestBody = {
+        model,
+        input: text
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+    let response: Response;
+    try {
+        response = await fetch('https://openrouter.ai/api/v1/embeddings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                'HTTP-Referer': 'https://github.com/jesson-stylesheet/the-ainn-game',
+                'X-Title': 'The AInn Game'
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
+        });
+    } catch (e: any) {
+        if (e.name === 'AbortError') {
+            throw new Error(`Embedding request timed out after 15s`);
+        }
+        throw new Error(`Failed to call OpenRouter Embeddings: ${e.message}`);
+    } finally {
+        clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenRouter API Error (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json() as EmbeddingResponse;
+    if (!data.data || data.data.length === 0 || !data.data[0].embedding) {
+        throw new Error(`Invalid response format from OpenRouter Embeddings: ${JSON.stringify(data)}`);
+    }
+
+    return data.data[0].embedding;
 }

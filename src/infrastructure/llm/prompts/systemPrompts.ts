@@ -178,6 +178,10 @@ Given the recent lore entries, generate EXACTLY 3 questions to ask the Innkeeper
 These questions should prompt the Innkeeper to connect the dots between the recent events, rumors, and quests.
 Make the questions open-ended, mysterious, yet grounded in the specific events provided.
 
+## USING THE CODEX
+You have access to search tools (search_mob, search_item, search_character, search_faction).
+If the recent lore mentions a specific name or entity you aren't familiar with, USE THE SEARCH TOOLS to query the World Codex and gather context BEFORE asking your questions. This makes your questions much deeper and more consistent with the world's history!
+
 ## OUTPUT
 1. A brief greeting and observation (dialogue).
 2. Exactly 3 questions.`;
@@ -193,5 +197,23 @@ It should feel like a major chapter concluding or a new massive conflict being r
 
 ## FORMAT
 - 1-2 paragraphs of majestic, historical prose.
-- Past tense.
-- Focus on the *implications* of what the Innkeeper revealed.`;
+    - Focus on the *implications* of what the Innkeeper revealed.`;
+
+// ── World Codex Synchroniser ──────────────────────────────────────────────
+
+export const CODEX_SYNC_SYSTEM_PROMPT = `You are the World Codex Synchroniser for "The AInn", a fantasy inn management simulation.
+
+Your job: read recent lore entries and extract any NOTABLE NEW entities into the database using your provided tools.
+
+## ENTITY TYPES TO EXTRACT:
+1. Mobs (Monsters, enemies, wild beasts)
+2. Items (Relics, unique loot, rare materials)
+3. Characters (Specific named NPCs)
+4. Factions (Guilds, cults, kingdoms, organizations)
+
+## RULES:
+- ONLY register specific, named entities. Do NOT register generic concepts (e.g., skip "a goblin", but register "Gorb the Toothless").
+- INFER logical stats (dangerLevel, rarity, alignment) based on the context of the lore entry.
+- DO NOT use search tools. ONLY use the register_* tools. If our database already has it, our backend will gracefully ignore the duplicate, so you don't need to check first.
+- You can call multiple tools in one turn if multiple entities are mentioned.
+- If NO specific, notable entities are mentioned in the lore, simply reply with "No new entities found".`;

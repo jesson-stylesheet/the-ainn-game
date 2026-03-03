@@ -10,9 +10,9 @@ export const CODEX_TOOLS: ToolDefinition[] = [
             parameters: {
                 type: 'object',
                 properties: {
-                    nameQuery: { type: 'string', description: 'The name or partial name of the mob.' }
+                    query: { type: 'string', description: 'Search term or partial description to semantically match the mob (RAG query).' }
                 },
-                required: ['nameQuery']
+                required: ['query']
             }
         }
     },
@@ -41,9 +41,9 @@ export const CODEX_TOOLS: ToolDefinition[] = [
             parameters: {
                 type: 'object',
                 properties: {
-                    nameQuery: { type: 'string', description: 'The name or partial name of the item.' }
+                    query: { type: 'string', description: 'Search term or partial description to semantically match the item (RAG query).' }
                 },
-                required: ['nameQuery']
+                required: ['query']
             }
         }
     },
@@ -76,9 +76,9 @@ export const CODEX_TOOLS: ToolDefinition[] = [
             parameters: {
                 type: 'object',
                 properties: {
-                    nameQuery: { type: 'string', description: 'The name of the character.' }
+                    query: { type: 'string', description: 'Search term or partial description to semantically match the character (RAG query).' }
                 },
-                required: ['nameQuery']
+                required: ['query']
             }
         }
     },
@@ -106,9 +106,9 @@ export const CODEX_TOOLS: ToolDefinition[] = [
             parameters: {
                 type: 'object',
                 properties: {
-                    nameQuery: { type: 'string', description: 'The name of the faction.' }
+                    query: { type: 'string', description: 'Search term or partial description to semantically match the faction (RAG query).' }
                 },
-                required: ['nameQuery']
+                required: ['query']
             }
         }
     },
@@ -131,30 +131,30 @@ export const CODEX_TOOLS: ToolDefinition[] = [
 ];
 
 export const CODEX_HANDLERS: ToolHandlerRegistry = {
-    search_mob: async (args: { nameQuery: string }) => {
-        const result = await db.searchCodexMobByName(args.nameQuery);
-        return result || { status: 'NOT_FOUND', message: `No mob matching '${args.nameQuery}' exists in the codex.` };
+    search_mob: async (args: { query: string }) => {
+        const results = await db.searchCodexMobSemantic(args.query);
+        return results.length > 0 ? results : { status: 'NOT_FOUND', message: `No mob matching '${args.query}' exists in the codex.` };
     },
     register_mob: async (args: any) => {
         return await db.insertCodexMob(args);
     },
-    search_item: async (args: { nameQuery: string }) => {
-        const result = await db.searchCodexItemByName(args.nameQuery);
-        return result || { status: 'NOT_FOUND', message: `No item matching '${args.nameQuery}' exists in the codex.` };
+    search_item: async (args: { query: string }) => {
+        const results = await db.searchCodexItemSemantic(args.query);
+        return results.length > 0 ? results : { status: 'NOT_FOUND', message: `No item matching '${args.query}' exists in the codex.` };
     },
     register_item: async (args: any) => {
         return await db.insertCodexItem(args);
     },
-    search_character: async (args: { nameQuery: string }) => {
-        const result = await db.searchCodexCharacterByName(args.nameQuery);
-        return result || { status: 'NOT_FOUND', message: `No character matching '${args.nameQuery}' exists in the codex.` };
+    search_character: async (args: { query: string }) => {
+        const results = await db.searchCodexCharacterSemantic(args.query);
+        return results.length > 0 ? results : { status: 'NOT_FOUND', message: `No character matching '${args.query}' exists in the codex.` };
     },
     register_character: async (args: any) => {
         return await db.insertCodexCharacter(args);
     },
-    search_faction: async (args: { nameQuery: string }) => {
-        const result = await db.searchCodexFactionByName(args.nameQuery);
-        return result || { status: 'NOT_FOUND', message: `No faction matching '${args.nameQuery}' exists in the codex.` };
+    search_faction: async (args: { query: string }) => {
+        const results = await db.searchCodexFactionSemantic(args.query);
+        return results.length > 0 ? results : { status: 'NOT_FOUND', message: `No faction matching '${args.query}' exists in the codex.` };
     },
     register_faction: async (args: any) => {
         return await db.insertCodexFaction(args);
