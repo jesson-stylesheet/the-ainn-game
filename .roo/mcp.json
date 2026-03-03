@@ -1,0 +1,29 @@
+{
+	"mcpServers": {
+		"supabase-mcp-server": {
+			"command": "npx",
+			"args": [
+				"-y",
+				"@supabase/mcp-server-supabase@latest",
+				"--access-token",
+				"sbp_950954fb3aab07535a9e27d8ff397d278d62f533"
+			],
+			"env": {}
+		},
+		"svelte": {
+			"url": "https://mcp.svelte.dev/mcp",
+			"disabled": true,
+			"alwaysAllow": []
+		},
+		"netlify": {
+			"command": "npx",
+			"args": [
+				"-y",
+				"@netlify/mcp"
+			],
+			"env": {
+				"NETLIFY_PERSONAL_ACCESS_TOKEN": "nfp_xthZDxe8ufsqd6iq9PBQ8WbAXprv9aUs2023"
+			}
+		}
+	}
+}

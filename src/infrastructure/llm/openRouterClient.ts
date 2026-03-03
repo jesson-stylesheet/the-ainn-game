@@ -304,16 +304,20 @@ export async function chatCompletionStructured<T>(
  * Generate a vector embedding for a given text string.
  * Uses 768 dimensions by default (compatible with google/text-embedding-004).
  */
-export async function generateEmbedding(text: string, model: string = 'google/gemini-embedding-001'): Promise<number[]> {
+export async function generateEmbedding(text: string, model: string = 'google/gemini-embedding-001', dimensions: number = 1536): Promise<number[]> {
     if (!OPENROUTER_API_KEY) {
         console.warn('⚠ OPENROUTER_API_KEY not set. Returning zero-vector.');
-        return new Array(768).fill(0);
+        return new Array(dimensions).fill(0);
     }
 
-    const requestBody = {
+    const requestBody: any = {
         model,
         input: text
     };
+
+    if (dimensions) {
+        requestBody.dimensions = dimensions;
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout

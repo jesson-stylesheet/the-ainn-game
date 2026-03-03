@@ -10,7 +10,7 @@ import { chatCompletionStructured, chatCompletion } from './openRouterClient';
 import type { IPatron, IQuest, QuestResolutionResult, PatronHealthStatus } from '../../core/types/entity';
 import { ALL_SKILL_TAGS } from '../../core/types/entity';
 import { loreChronicle } from '../../core/engine/loreChronicle';
-import { CODEX_TOOLS, CODEX_HANDLERS } from './codexTools';
+import { CODEX_SEARCH_TOOLS, CODEX_FULL_TOOLS, CODEX_HANDLERS } from './codexTools';
 import { searchCodexMobSemantic, searchCodexItemSemantic, searchCodexFactionSemantic } from '../db/queries';
 
 // ── Centralized imports ────────────────────────────────────────────────
@@ -58,7 +58,7 @@ MATH:
                 model: 'google/gemini-3-flash-preview',
                 temperature: 0.8,
                 maxTokens: 600,
-                tools: CODEX_TOOLS,
+                tools: CODEX_FULL_TOOLS,
                 toolHandlers: CODEX_HANDLERS,
                 tool_choice: 'auto'
             }
@@ -87,7 +87,7 @@ export async function parseQuestStructured(text: string, inventoryContext: strin
             model: 'google/gemini-2.5-flash',
             temperature: 0.2,
             maxTokens: 512,
-            tools: CODEX_TOOLS,
+            tools: CODEX_SEARCH_TOOLS,
             toolHandlers: CODEX_HANDLERS,
             tool_choice: 'auto'
         }
@@ -249,10 +249,10 @@ export async function generateGuardianQuestions(recentLore: string): Promise<Gua
             ],
             GUARDIAN_QUESTION_SCHEMA,
             {
-                model: 'google/gemini-3-flash-preview',
-                temperature: 0.8,
-                maxTokens: 400,
-                tools: CODEX_TOOLS,
+                model: 'google/gemini-2.5-flash',
+                temperature: 0.1,
+                maxTokens: 512,
+                tools: CODEX_FULL_TOOLS,
                 toolHandlers: CODEX_HANDLERS,
                 tool_choice: 'auto'
             } // Slight bump in temp for creativity
@@ -289,10 +289,10 @@ export async function synthesizeLore(recentLore: string, questions: string[], an
                 { role: 'user', content: prompt },
             ],
             {
-                model: 'google/gemini-3-flash-preview',
-                temperature: 0.9,
-                maxTokens: 500,
-                tools: CODEX_TOOLS,
+                model: 'google/gemini-2.5-flash',
+                temperature: 0.1,
+                maxTokens: 512,
+                tools: CODEX_FULL_TOOLS,
                 toolHandlers: CODEX_HANDLERS,
                 tool_choice: 'auto'
             }
@@ -322,7 +322,7 @@ export async function syncCodexFromLore(loreEntry: string): Promise<void> {
                 model: 'google/gemini-2.5-flash',
                 temperature: 0.1, // Low temperature for factual extraction
                 maxTokens: 500,
-                tools: CODEX_TOOLS,
+                tools: CODEX_FULL_TOOLS,
                 toolHandlers: CODEX_HANDLERS,
                 tool_choice: 'auto'
             }

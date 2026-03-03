@@ -556,7 +556,7 @@ export async function insertCodexMob(mob: ICodexMob): Promise<ICodexMob> {
     if (existing) return existing;
 
     const embedText = `${cleanName}: ${mob.description} (Danger: ${mob.dangerLevel}, Habitat: ${mob.habitat})`;
-    const embedding = await generateEmbedding(embedText);
+    const embedding = await generateEmbedding(embedText, 'google/gemini-embedding-001', 1536);
 
     const { data, error } = await supabase.from('codex_mobs').insert({
         id: mob.id, world_id: gameState.worldId, name: cleanName, description: mob.description,
@@ -575,7 +575,7 @@ export async function searchCodexMobByName(nameQuery: string): Promise<ICodexMob
 }
 
 export async function searchCodexMobSemantic(query: string, matchThreshold: number = 0.7, matchCount: number = 3): Promise<ICodexMob[]> {
-    const embedding = await generateEmbedding(query);
+    const embedding = await generateEmbedding(query, 'google/gemini-embedding-001', 1536);
     const { data, error } = await supabase.rpc('match_codex_mobs', {
         query_embedding: embedding,
         match_threshold: matchThreshold,
@@ -595,7 +595,7 @@ export async function insertCodexItem(item: ICodexItem): Promise<ICodexItem> {
     if (existing) return existing;
 
     const embedText = `${cleanName}: ${item.description} (Category: ${item.category}, Rarity: ${item.rarity})`;
-    const embedding = await generateEmbedding(embedText);
+    const embedding = await generateEmbedding(embedText, 'google/gemini-embedding-001', 1536);
 
     const { data, error } = await supabase.from('codex_items').insert({
         id: item.id, world_id: gameState.worldId, name: cleanName, description: item.description,
@@ -614,7 +614,7 @@ export async function searchCodexItemByName(nameQuery: string): Promise<ICodexIt
 }
 
 export async function searchCodexItemSemantic(query: string, matchThreshold: number = 0.7, matchCount: number = 3): Promise<ICodexItem[]> {
-    const embedding = await generateEmbedding(query);
+    const embedding = await generateEmbedding(query, 'google/gemini-embedding-001', 1536);
     const { data, error } = await supabase.rpc('match_codex_items', {
         query_embedding: embedding,
         match_threshold: matchThreshold,
@@ -634,7 +634,7 @@ export async function insertCodexCharacter(character: ICodexCharacter): Promise<
     if (existing) return existing;
 
     const embedText = `${cleanName}: ${character.description} (Type: ${character.characterType})`;
-    const embedding = await generateEmbedding(embedText);
+    const embedding = await generateEmbedding(embedText, 'google/gemini-embedding-001', 1536);
 
     const { data, error } = await supabase.from('codex_characters').insert({
         id: character.id, world_id: gameState.worldId, name: cleanName, description: character.description,
@@ -653,7 +653,7 @@ export async function searchCodexCharacterByName(nameQuery: string): Promise<ICo
 }
 
 export async function searchCodexCharacterSemantic(query: string, matchThreshold: number = 0.7, matchCount: number = 3): Promise<ICodexCharacter[]> {
-    const embedding = await generateEmbedding(query);
+    const embedding = await generateEmbedding(query, 'google/gemini-embedding-001', 1536);
     const { data, error } = await supabase.rpc('match_codex_characters', {
         query_embedding: embedding,
         match_threshold: matchThreshold,
@@ -673,7 +673,7 @@ export async function insertCodexFaction(faction: ICodexFaction): Promise<ICodex
     if (existing) return existing;
 
     const embedText = `${cleanName}: ${faction.description} (Alignment: ${faction.alignment})`;
-    const embedding = await generateEmbedding(embedText);
+    const embedding = await generateEmbedding(embedText, 'google/gemini-embedding-001', 1536);
 
     const { data, error } = await supabase.from('codex_factions').insert({
         id: faction.id, world_id: gameState.worldId, name: cleanName, description: faction.description, alignment: faction.alignment, embedding
@@ -691,7 +691,7 @@ export async function searchCodexFactionByName(nameQuery: string): Promise<ICode
 }
 
 export async function searchCodexFactionSemantic(query: string, matchThreshold: number = 0.7, matchCount: number = 3): Promise<ICodexFaction[]> {
-    const embedding = await generateEmbedding(query);
+    const embedding = await generateEmbedding(query, 'google/gemini-embedding-001', 1536);
     const { data, error } = await supabase.rpc('match_codex_factions', {
         query_embedding: embedding,
         match_threshold: matchThreshold,
@@ -711,7 +711,7 @@ export async function insertCodexRecipe(recipe: ICodexRecipe, materials: ICodexR
     if (existing) return existing;
 
     const embedText = `${cleanName}: ${recipe.description}`;
-    const embedding = await generateEmbedding(embedText);
+    const embedding = await generateEmbedding(embedText, 'google/gemini-embedding-001', 1536);
 
     const { data, error } = await supabase.from('codex_recipes').insert({
         id: recipe.id, world_id: gameState.worldId, name: cleanName, description: recipe.description, crafted_item_id: recipe.craftedItemId, embedding
@@ -741,7 +741,7 @@ export async function searchCodexRecipeByName(nameQuery: string): Promise<ICodex
 }
 
 export async function searchCodexRecipeSemantic(query: string, matchThreshold: number = 0.7, matchCount: number = 3): Promise<ICodexRecipe[]> {
-    const embedding = await generateEmbedding(query);
+    const embedding = await generateEmbedding(query, 'google/gemini-embedding-001', 1536);
     const { data, error } = await supabase.rpc('match_codex_recipes', {
         query_embedding: embedding,
         match_threshold: matchThreshold,

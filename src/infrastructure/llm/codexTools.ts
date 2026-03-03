@@ -130,6 +130,15 @@ export const CODEX_TOOLS: ToolDefinition[] = [
     }
 ];
 
+export const CODEX_SEARCH_TOOLS: ToolDefinition[] = [
+    CODEX_TOOLS[0], // search_mob
+    CODEX_TOOLS[2], // search_item
+    CODEX_TOOLS[4], // search_character
+    CODEX_TOOLS[6]  // search_faction
+];
+
+export const CODEX_FULL_TOOLS = CODEX_TOOLS;
+
 export const CODEX_HANDLERS: ToolHandlerRegistry = {
     search_mob: async (args: { query: string }) => {
         const results = await db.searchCodexMobSemantic(args.query);

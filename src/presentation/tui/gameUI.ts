@@ -38,7 +38,7 @@ const C = {
 // ── Config ──────────────────────────────────────────────────────────────
 
 let useLLM = true;        // Toggle LLM quest parsing (default: on)
-let useDB = false;        // Toggle Supabase persistence (default: in-memory)
+let useDB = true;         // Toggle Supabase persistence (default: on)
 let isGuardianActive = false; // Prevent overlapping triggers
 
 // ── Display Helpers ─────────────────────────────────────────────────────
@@ -753,7 +753,11 @@ function toggleModes(rl: readline.Interface): Promise<void> {
 
         const choice = await askQuestion(rl, 'Toggle (1/2): ');
         if (choice === '1') { useLLM = !useLLM; console.log(`  LLM Parser: ${useLLM ? 'ON' : 'OFF'}`); }
-        if (choice === '2') { useDB = !useDB; console.log(`  Supabase: ${useDB ? 'ON' : 'OFF'}`); }
+        if (choice === '2') {
+            useDB = !useDB;
+            process.env.USE_DB = useDB ? 'true' : 'false';
+            console.log(`  Supabase: ${useDB ? 'ON' : 'OFF'}`);
+        }
         resolve();
     });
 }
@@ -766,11 +770,20 @@ export async function startTUI(): Promise<void> {
         output: process.stdout,
     });
 
+    // Ensure backend adapters see DB as enabled by default in TUI
+    if (useDB) process.env.USE_DB = 'true';
+
+    // Initialize background LLM and DB workers
+    narrativeWorker.init();
+    syncAdapter.init();
+
+    // Hydrate state from DB if enabled
+    if (useDB) {
+        await syncAdapter.hydrateGameState();
+    }
+
     // Start the game loop automatically
     ticker.start();
-
-    // Initialize background LLM processor
-    narrativeWorker.init();
 
     // Subscribe to events for logging
     eventBus.on('patron:arrived', ({ patron }) => {
