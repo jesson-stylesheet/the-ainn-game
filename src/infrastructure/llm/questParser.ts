@@ -18,6 +18,7 @@ import { DEFAULT_QUEST_DEADLINE_HOURS, TICK_MULTIPLIER } from '../../core/consta
 import { generateUUID } from '../../core/engine/utils';
 import { parseQuestText as mockParseQuestText } from '../../core/engine/questFactory';
 import { gameState } from '../../core/engine/gameState';
+import { ticker } from '../../core/engine/ticker';
 
 // Valid quest types for validation
 const VALID_QUEST_TYPES: QuestType[] = ['diplomacy', 'itemRetrieval', 'subjugation', 'crafting'];
@@ -125,7 +126,7 @@ export async function parseQuestWithLLM(text: string, innReputation: number = 0)
             }));
         }
 
-        const now = Date.now();
+        const now = ticker.simulatedTime;
 
         return {
             id: generateUUID(),

@@ -113,6 +113,43 @@ interface InnStateRow {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+//  WORLDS & INNS (Multi-Tenancy)
+// ═══════════════════════════════════════════════════════════════════════
+
+export async function fetchWorlds(): Promise<{ id: string; name: string }[]> {
+    const { data, error } = await supabase.from('worlds').select('id, name').order('created_at', { ascending: true });
+    if (error) throw new Error(`Failed to fetch worlds: ${error.message}`);
+    return data as { id: string; name: string }[];
+}
+
+export async function createWorld(name: string): Promise<string> {
+    const { data, error } = await supabase.from('worlds').insert({ name }).select('id').single();
+    if (error) throw new Error(`Failed to create world: ${error.message}`);
+    return data.id;
+}
+
+export async function fetchInns(worldId: string, playerId: string): Promise<{ id: string; name: string; world_id: string }[]> {
+    const { data, error } = await supabase
+        .from('inns')
+        .select('id, name, world_id')
+        .eq('world_id', worldId)
+        .eq('player_id', playerId)
+        .order('created_at', { ascending: true });
+    if (error) throw new Error(`Failed to fetch inns: ${error.message}`);
+    return data as { id: string; name: string; world_id: string }[];
+}
+
+export async function createInn(worldId: string, playerId: string, name: string): Promise<string> {
+    const { data, error } = await supabase
+        .from('inns')
+        .insert({ world_id: worldId, player_id: playerId, name })
+        .select('id')
+        .single();
+    if (error) throw new Error(`Failed to create inn: ${error.message}`);
+    return data.id;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 //  INN STATE
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -141,7 +178,6 @@ export async function updateInnState(updates: Partial<InnState>): Promise<void> 
     if (error) throw new Error(`Failed to update inn state: ${error.message}`);
 }
 
-/** Tick the game clock via Postgres RPC. Returns the new tick value. */
 export async function tickGameClock(ticksToAdd: number = 1): Promise<number> {
     const { data, error } = await supabase.rpc('tick_game_clock', { p_inn_id: gameState.innId, ticks_to_add: ticksToAdd });
     if (error) throw new Error(`Failed to tick game clock: ${error.message}`);

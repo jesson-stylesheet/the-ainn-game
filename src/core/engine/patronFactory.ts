@@ -17,6 +17,7 @@ import {
 import { MIN_STAT, MAX_STAT, STAT_VARIANCE } from '../constants';
 import { generateUUID, rollInt, clamp } from './utils';
 import { RACES, JOBS, CHANCES_MATRIX, capitalize, type Race, type Job } from './generationChances';
+import { ticker } from './ticker';
 
 // ── Fantasy Name Pools ──────────────────────────────────────────────────
 
@@ -286,7 +287,7 @@ export function createPatron(race?: Race, job?: Job, innReputation: number = 0):
         skills: buildSkillVector(raceBlueprint, jobBlueprint, innReputation),
         state: 'IDLE',
         healthStatus: 'HEALTHY',
-        arrivalTimestamp: Date.now(),
+        arrivalTimestamp: ticker.simulatedTime,
         equipment: createEmptyEquipment(),
         inventory: [],
         gold: 0,

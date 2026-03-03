@@ -5,8 +5,8 @@
  * All magic numbers live here. Nowhere else. Ever.
  */
 
-/** 1 real second = 1 in-game hour */
-export const TICK_MULTIPLIER = 3600;
+/** 1 real second = 120 in-game seconds (2 game minutes) */
+export const TICK_MULTIPLIER = 120;
 
 /** Milliseconds between ticks (1 second) */
 export const TICK_INTERVAL_MS = 1000;

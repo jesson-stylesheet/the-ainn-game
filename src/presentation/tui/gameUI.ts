@@ -20,6 +20,7 @@ import { ticker } from '../../core/engine/ticker';
 import { resolveQuest } from '../../core/math/probability';
 import { syncAdapter } from '../../infrastructure/db/syncAdapter';
 import { narrativeWorker } from '../../core/engine/narrativeWorker';
+import * as db from '../../infrastructure/db/queries';
 import type { SkillTag, IPatron, IQuest, QuestResolutionResult, ItemCategory, EquipmentSlot } from '../../core/types/entity';
 import { ALL_SKILL_TAGS } from '../../core/types/entity';
 import { parseQuestWithLLM } from '../../infrastructure/llm/questParser';
@@ -762,6 +763,82 @@ function toggleModes(rl: readline.Interface): Promise<void> {
     });
 }
 
+// ── Login Flow ──────────────────────────────────────────────────────────
+
+async function loginFlow(rl: readline.Interface): Promise<void> {
+    console.clear();
+    console.log(`${C.bright}${C.cyan}  ╔════════════════════════════════════════════════╗`);
+    console.log(`  ║           ⚔  THE AINN  ⚔                     ║`);
+    console.log(`  ║      An Innkeeper's Management Simulation     ║`);
+    console.log(`  ╚════════════════════════════════════════════════╝${C.reset}\n`);
+
+    // 1. Auto-login as the specific user
+    const playerId = '8307544f-4b84-426a-a9c7-ae51438ee777';
+    console.log(`  ${C.dim}Logging in as Player: ${playerId}...${C.reset}\n`);
+
+    // 2. World Selection
+    let worldId = '';
+    const worlds = await db.fetchWorlds();
+    if (worlds.length === 0) {
+        console.log(`  ${C.yellow}No worlds found. Creating a new world...${C.reset}`);
+        const name = await askQuestion(rl, 'Enter new world name: ');
+        worldId = await db.createWorld(name || 'New World');
+        console.log(`  ${C.green}✓ World created.${C.reset}\n`);
+    } else {
+        console.log(`  ${C.bright}Available Worlds:${C.reset}`);
+        worlds.forEach((w, i) => console.log(`    ${C.cyan}${i + 1}${C.reset}. ${w.name} ${C.dim}(${w.id})${C.reset}`));
+        console.log(`    ${C.cyan}N${C.reset}. Create New World`);
+
+        const wChoice = await askQuestion(rl, '\n  Select World: ');
+        if (wChoice.toUpperCase() === 'N') {
+            const name = await askQuestion(rl, 'Enter new world name: ');
+            worldId = await db.createWorld(name || 'New World');
+            console.log(`  ${C.green}✓ World created.${C.reset}\n`);
+        } else {
+            const idx = parseInt(wChoice) - 1;
+            if (!isNaN(idx) && idx >= 0 && idx < worlds.length) {
+                worldId = worlds[idx].id;
+            } else {
+                console.log(`  ${C.red}Invalid choice, defaulting to first world.${C.reset}\n`);
+                worldId = worlds[0].id;
+            }
+        }
+    }
+
+    // 3. Inn Selection
+    let innId = '';
+    const inns = await db.fetchInns(worldId, playerId);
+    if (inns.length === 0) {
+        console.log(`  ${C.yellow}No inns found in this world for your player. Creating a new inn...${C.reset}`);
+        const name = await askQuestion(rl, 'Enter new inn name: ');
+        innId = await db.createInn(worldId, playerId, name || 'The Rusty Mug');
+        console.log(`  ${C.green}✓ Inn created.${C.reset}\n`);
+    } else {
+        console.log(`  ${C.bright}Your Inns in this World:${C.reset}`);
+        inns.forEach((inn, i) => console.log(`    ${C.cyan}${i + 1}${C.reset}. ${inn.name} ${C.dim}(${inn.id})${C.reset}`));
+        console.log(`    ${C.cyan}N${C.reset}. Create New Inn`);
+
+        const iChoice = await askQuestion(rl, '\n  Select Inn: ');
+        if (iChoice.toUpperCase() === 'N') {
+            const name = await askQuestion(rl, 'Enter new inn name: ');
+            innId = await db.createInn(worldId, playerId, name || 'The Rusty Mug');
+            console.log(`  ${C.green}✓ Inn created.${C.reset}\n`);
+        } else {
+            const idx = parseInt(iChoice) - 1;
+            if (!isNaN(idx) && idx >= 0 && idx < inns.length) {
+                innId = inns[idx].id;
+            } else {
+                console.log(`  ${C.red}Invalid choice, defaulting to first inn.${C.reset}\n`);
+                innId = inns[0].id;
+            }
+        }
+    }
+
+    // 4. Set Identifiers
+    gameState.setIdentifiers(playerId, worldId, innId);
+    console.log(`  ${C.green}✓ Game State Initialized.${C.reset}\n`);
+}
+
 // ── Main Loop ───────────────────────────────────────────────────────────
 
 export async function startTUI(): Promise<void> {
@@ -772,6 +849,27 @@ export async function startTUI(): Promise<void> {
 
     // Ensure backend adapters see DB as enabled by default in TUI
     if (useDB) process.env.USE_DB = 'true';
+
+    // Run Login Flow
+    if (useDB) {
+        try {
+            await loginFlow(rl);
+        } catch (e) {
+            console.error(`\n  ${C.red}Failed to initialize game state from DB: ${(e as Error).message}${C.reset}`);
+            console.log(`  ${C.yellow}Falling back to mock identifiers...${C.reset}\n`);
+            gameState.setIdentifiers(
+                '8307544f-4b84-426a-a9c7-ae51438ee777',
+                '00000000-0000-0000-0000-000000000002',
+                '00000000-0000-0000-0000-000000000003'
+            );
+        }
+    } else {
+        gameState.setIdentifiers(
+            '8307544f-4b84-426a-a9c7-ae51438ee777',
+            '00000000-0000-0000-0000-000000000002',
+            '00000000-0000-0000-0000-000000000003'
+        );
+    }
 
     // Initialize background LLM and DB workers
     narrativeWorker.init();

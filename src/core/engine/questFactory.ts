@@ -27,6 +27,7 @@ import {
 } from '../types/entity';
 import { DEFAULT_QUEST_DEADLINE_HOURS, TICK_MULTIPLIER } from '../constants';
 import { generateUUID, rollInt } from './utils';
+import { ticker } from './ticker';
 
 // ── Verbosity Constants ─────────────────────────────────────────────────
 
@@ -357,7 +358,7 @@ export function parseQuestText(text: string, innReputation: number = 0): IQuest 
         ? Math.max(10, Math.min(rawDifficulty, Math.round(totalReqSum * 0.85)))
         : rawDifficulty;
 
-    const now = Date.now();
+    const now = ticker.simulatedTime;
 
     return {
         id: generateUUID(),

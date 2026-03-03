@@ -14,10 +14,13 @@ const SUPABASE_URL = process.env.PUBLIC_SUPABASE_URL;
 // Use Service Role Key for the headless server to bypass RLS, fallback to Anon Key
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.PUBLIC_SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-    throw new Error(
-        'Missing Supabase credentials. Ensure PUBLIC_SUPABASE_URL and either SUPABASE_SERVICE_ROLE_KEY or PUBLIC_SUPABASE_ANON_KEY are set in .env'
-    );
-}
+import fetch from 'node-fetch';
 
-export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+const url = SUPABASE_URL || '';
+const key = SUPABASE_KEY || '';
+
+export const supabase: SupabaseClient = createClient(url, key, {
+    global: {
+        fetch: fetch as any,
+    },
+});
