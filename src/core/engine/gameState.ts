@@ -318,6 +318,8 @@ class GameState {
         item.location = 'EQUIPPED';
         patron.equipment[slot] = item;
 
+        eventBus.emit('item:equipped', { item, patronId, slot });
+
         return true;
     }
 
@@ -333,6 +335,8 @@ class GameState {
         item.equippedSlot = null;
         item.location = 'INN_VAULT';
         patron.equipment[slot] = null;
+
+        eventBus.emit('item:unequipped', { item, patronId, slot });
 
         return true;
     }

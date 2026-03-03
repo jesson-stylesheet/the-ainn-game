@@ -134,6 +134,20 @@ class DBSyncAdapter {
             });
         });
 
+        eventBus.on('item:equipped', ({ item, patronId, slot }) => {
+            if (!isDBEnabled()) return;
+            this.dbQueue.push(async () => {
+                await db.updateItemLocation(item.id, patronId, slot as any, 'EQUIPPED');
+            });
+        });
+
+        eventBus.on('item:unequipped', ({ item }) => {
+            if (!isDBEnabled()) return;
+            this.dbQueue.push(async () => {
+                await db.updateItemLocation(item.id, null, null, 'INN_VAULT');
+            });
+        });
+
         // ── Inn State
         eventBus.on('inn:reputation_gained', ({ total }) => {
             if (!isDBEnabled()) return;

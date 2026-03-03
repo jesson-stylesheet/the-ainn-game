@@ -19,6 +19,8 @@ export interface GameEvents {
     'quest:expired': { quest: IQuest };
     'quest:resolved': { result: QuestResolutionResult; patron: IPatron; quest: IQuest };
     'item:added': { item: IItem };
+    'item:equipped': { item: IItem, patronId: string, slot: string };
+    'item:unequipped': { item: IItem, patronId: string, slot: string };
     'narrative:completed': {
         questId: string;
         patronId: string;

@@ -22,7 +22,6 @@ import { syncAdapter } from '../../infrastructure/db/syncAdapter';
 import { narrativeWorker } from '../../core/engine/narrativeWorker';
 import type { SkillTag, IPatron, IQuest, QuestResolutionResult, ItemCategory, EquipmentSlot } from '../../core/types/entity';
 import { ALL_SKILL_TAGS } from '../../core/types/entity';
-import * as db from '../../infrastructure/db/queries';
 import { parseQuestWithLLM } from '../../infrastructure/llm/questParser';
 import { renderResolution, renderArrivalNarrative, generatePatronQuest, generateGuardianQuestions, synthesizeLore } from '../../infrastructure/llm/narrativeRenderer';
 import { loreGuardian, GUARDIAN_THRESHOLD } from '../../core/engine/loreGuardian';
@@ -62,6 +61,10 @@ function showStatus(): void {
     ].join(' │ ');
 
     console.log(`  ${C.gray}┌─────────────────────────────────────────┐${C.reset}`);
+    console.log(`  ${C.gray}│${C.reset} Player:  ${C.bright}${gameState.playerId}${C.reset.padEnd(35)} ${C.gray}│${C.reset}`);
+    console.log(`  ${C.gray}│${C.reset} World:   ${C.dim}${gameState.worldId}${C.reset.padEnd(35)} ${C.gray}│${C.reset}`);
+    console.log(`  ${C.gray}│${C.reset} Inn:     ${C.dim}${gameState.innId}${C.reset.padEnd(35)} ${C.gray}│${C.reset}`);
+    console.log(`  ${C.gray}├─────────────────────────────────────────┤${C.reset}`);
     console.log(`  ${C.gray}│${C.reset} Patrons: ${C.bright}${s.totalPatrons}${C.reset} (${s.idlePatrons} idle, ${s.onQuestPatrons} questing)  ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}│${C.reset} Quests:  ${s.postedQuests} posted, ${C.green}${s.completedQuests}${C.reset} done, ${C.red}${s.failedQuests}${C.reset} failed  ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}│${C.reset} Lore:    ${loreChronicle.size} entries                      ${C.gray}│${C.reset}`);
@@ -202,14 +205,6 @@ async function postQuest(rl: readline.Interface): Promise<void> {
     const tagCount = ALL_SKILL_TAGS.filter(t => quest.requirements[t] > 0).length;
     gameState.addQuest(quest);
 
-    if (useDB) {
-        try {
-            await db.insertQuest(quest, verbosity.verbosityScore);
-        } catch (e) {
-            console.log(`  ${C.red}DB write failed: ${(e as Error).message}${C.reset}`);
-        }
-    }
-
     console.log(`\n  ${C.green}✓ Quest posted!${C.reset} ${C.cyan}[${quest.type}]${C.reset} D=${quest.difficultyScalar} | T=${quest.resolutionTicks} | ${tagCount} tags`);
     if (quest.itemDetails) {
         const r = quest.itemDetails.rarity;
@@ -264,17 +259,6 @@ async function viewPatrons(rl: readline.Interface): Promise<void> {
                 const ok = gameState.evictPatron(p.id);
                 if (ok) {
                     console.log(`  ${C.green}✓ ${p.name} has been evicted from the inn.${C.reset}`);
-
-                    if (useDB) {
-                        try {
-                            // If there is an API or DB method for eviction, call it here.
-                            // Currently we might just delete from patrons table or update state.
-                            // Assuming we have db.updatePatronState
-                            // await db.updatePatronState(p.id, 'DEPARTED');
-                        } catch (e) {
-                            console.log(`  ${C.dim}DB logic for eviction not yet fully implemented: ${(e as Error).message}${C.reset}`);
-                        }
-                    }
                 } else {
                     console.log(`  ${C.red}✗ Failed to evict patron.${C.reset}`);
                 }
@@ -466,14 +450,6 @@ async function assignPatron(rl: readline.Interface): Promise<void> {
 
     if (ok) {
         console.log(`  ${C.green}✓ ${patron.name} accepted "${quest.originalText.slice(0, 40)}..."${C.reset}`);
-
-        if (useDB) {
-            try {
-                await db.assignPatronToQuestAtomic(patron.id, quest.id);
-            } catch (e) {
-                console.log(`  ${C.red}DB sync failed: ${(e as Error).message}${C.reset}`);
-            }
-        }
     } else {
         console.log(`  ${C.red}✗ Assignment failed.${C.reset}`);
     }
@@ -633,14 +609,6 @@ async function equipPatron(rl: readline.Interface): Promise<void> {
     if (ok) {
         const { label: rl, color: rc } = getRarityLabel(item.rarity);
         console.log(`\n  ${C.green}✓ ${patron.name} equipped ${rc}${item.name}${C.reset}${C.green} in ${SLOT_LABELS[slot]}.${C.reset}`);
-
-        if (useDB) {
-            try {
-                await db.updateItemLocation(item.id, patron.id, slot, 'EQUIPPED');
-            } catch (e) {
-                console.log(`  ${C.red}DB sync failed: ${(e as Error).message}${C.reset}`);
-            }
-        }
     } else {
         console.log(`  ${C.red}✗ Failed to equip item.${C.reset}`);
     }
@@ -680,21 +648,6 @@ async function handleGuardianVisit(rl: readline.Interface, recentLore: string): 
         const wrapped = wordWrap(synthesis, 75);
         wrapped.forEach(line => console.log(`  ${line}`));
         console.log(`\n  ${C.magenta}✧ ════════════════════════════════════════════ ✧${C.reset}\n`);
-
-        if (useDB) {
-            try {
-                await db.insertLoreEntry({
-                    questId: null,
-                    originalText: qAndAText,
-                    outcome: 'SYNTHESIS',
-                    patronName: 'The Chronicle Guardian',
-                    patronArchetype: 'Celestial Observer',
-                    narrativeSeed: synthesis,
-                });
-            } catch (e) {
-                console.log(`  ${C.red}DB sync failed for Guardian synthesis: ${(e as Error).message}${C.reset}`);
-            }
-        }
     } catch (error) {
         console.log(`\n  ${C.red}⚠ Guardian visit failed: ${(error as Error).message}${C.reset}`);
         console.log(`  ${C.dim}The Guardian fades into the mist. Perhaps they will return...${C.reset}\n`);
@@ -740,12 +693,6 @@ async function tryPatronAutoQuest(patron: IPatron, force: boolean = false): Prom
             console.log(`    📦 ${quest.itemDetails.quantity}x ${C.bright}${quest.itemDetails.itemName}${C.reset} ${rarityColor}(Rarity: ${r.toFixed(2)})${C.reset}`);
         }
         printSkills(quest.requirements, '    ');
-
-        if (useDB) {
-            try { await db.insertQuest(quest, 0); } catch (e) {
-                console.log(`    ${C.red}DB: ${(e as Error).message}${C.reset}`);
-            }
-        }
     } catch (error) {
         console.log(`  ${C.red}Auto-quest failed: ${(error as Error).message}${C.reset}`);
     }
@@ -776,12 +723,6 @@ async function summonPatron(rl: readline.Interface): Promise<void> {
 
     gameState.addPatron(patron);
 
-    if (useDB) {
-        try { await db.insertPatron(patron); } catch (e) {
-            console.log(`  ${C.red}DB: ${(e as Error).message}${C.reset}`);
-        }
-    }
-
     console.log(`\n  ${C.green}✓${C.reset} ${C.magenta}${patron.name}${C.reset} (${patron.archetype}) enters the inn!`);
     printSkills(patron.skills, '    ');
 
@@ -797,12 +738,6 @@ async function populateInn(): Promise<void> {
         const p = createPatron(undefined, undefined, gameState.reputation);
         gameState.addPatron(p);
         console.log(`  ${C.green}✓${C.reset} ${C.magenta}${p.name}${C.reset} (${p.archetype})`);
-
-        if (useDB) {
-            try { await db.insertPatron(p); } catch (e) {
-                console.log(`    ${C.red}DB: ${(e as Error).message}${C.reset}`);
-            }
-        }
 
         await tryPatronAutoQuest(p);
     }
