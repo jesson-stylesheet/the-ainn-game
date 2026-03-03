@@ -447,12 +447,12 @@ async function assignPatron(rl: readline.Interface): Promise<void> {
         }
     }
 
-    const ok = gameState.assignPatronToQuest(patron.id, quest.id);
+    const result = gameState.assignPatronToQuest(patron.id, quest.id);
 
-    if (ok) {
+    if (result.ok) {
         console.log(`  ${C.green}✓ ${patron.name} accepted "${quest.originalText.slice(0, 40)}..."${C.reset}`);
     } else {
-        console.log(`  ${C.red}✗ Assignment failed.${C.reset}`);
+        console.log(`  ${C.red}✗ Assignment failed: ${result.error}${C.reset}`);
     }
 }
 

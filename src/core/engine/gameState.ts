@@ -123,24 +123,36 @@ class GameState {
     /**
      * Assign a patron to a quest. Sets patron to ON_QUEST, quest to ACCEPTED.
      */
-    assignPatronToQuest(patronId: string, questId: string): boolean {
+    assignPatronToQuest(patronId: string, questId: string): { ok: boolean; error?: string } {
         const patron = this.patrons.get(patronId);
         const quest = this.quests.get(questId);
 
-        if (!patron || !quest) return false;
-        if (patron.state !== 'IDLE' && patron.state !== 'LOUNGING') return false;
-        if (quest.status !== 'POSTED') return false;
-        if (quest.postedByPatronId && quest.postedByPatronId === patronId) return false; // Can't do your own quest
+        if (!patron) return { ok: false, error: 'Patron not found' };
+        if (!quest) return { ok: false, error: 'Quest not found' };
+
+        if (patron.state !== 'IDLE' && patron.state !== 'LOUNGING') {
+            return { ok: false, error: `Patron is currently ${patron.state}` };
+        }
+        if (quest.status !== 'POSTED') {
+            return { ok: false, error: `Quest is already ${quest.status}` };
+        }
+        if (quest.postedByPatronId && quest.postedByPatronId === patronId) {
+            return { ok: false, error: 'Patron cannot accept their own quest' };
+        }
 
         if (quest.type === 'crafting' && quest.consumedItems) {
             // First check if we have enough of all required materials
+            const missing: string[] = [];
             for (const req of quest.consumedItems) {
                 const total = this.getInnInventory()
                     .filter(i => i.name.toLowerCase() === req.itemName.toLowerCase())
                     .reduce((sum, i) => sum + i.quantity, 0);
                 if (total < req.quantity) {
-                    return false; // Cannot assign, missing ingredients
+                    missing.push(`${req.quantity - total}x ${req.itemName}`);
                 }
+            }
+            if (missing.length > 0) {
+                return { ok: false, error: `Missing materials: ${missing.join(', ')}` };
             }
             // Then consume them permanently
             for (const req of quest.consumedItems) {
@@ -153,7 +165,7 @@ class GameState {
         quest.status = 'ACCEPTED';
 
         eventBus.emit('quest:accepted', { quest, patron });
-        return true;
+        return { ok: true };
     }
 
     /**

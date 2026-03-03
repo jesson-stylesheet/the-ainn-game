@@ -24,7 +24,7 @@ class NarrativeWorker {
             try {
                 // Call the LLM to render the story, lore, and health impact
                 console.log(`[NarrativeWorker] Calling LLM renderResolution...`);
-                const resolution = await renderResolution(result, patron, quest);
+                const resolution = await renderResolution(result, patron, quest, quest.originalText);
                 console.log(`[NarrativeWorker] Received LLM response for ${quest.id}`);
 
                 // Apply consequences to the in-memory state

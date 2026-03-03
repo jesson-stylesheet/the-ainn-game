@@ -31,11 +31,12 @@ export type { ResolutionNarrative, QuestParseResult, ItemDedupResult, GuardianQu
 export async function renderResolution(
     result: QuestResolutionResult,
     patron: IPatron,
-    quest: IQuest
+    quest: IQuest,
+    originalQuestPost: string
 ): Promise<ResolutionNarrative> {
-    const prompt = `Narrate this quest outcome:
+    const prompt = `Narrate this quest outcome in 90-120 words:
 
-QUEST: "${quest.originalText}"
+ORIGINAL QUEST POST: "${originalQuestPost}"
 PATRON: ${patron.name} (${patron.archetype}) [currently ${patron.healthStatus}]
 OUTCOME: ${result.success ? 'SUCCESS' : 'FAILURE'}
 
