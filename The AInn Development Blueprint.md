@@ -19,7 +19,7 @@ You are acting as a Senior Backend Systems Engineer. Your task is to build the h
 While you are building cold math, you must understand the narrative wrapper. The player acts as the stationary anchor in a chaotic fantasy universe—the Innkeeper of "The AInn".
 
 * **The Entities:** The inn is populated by procedural patrons: mundane adventurers, esoteric monsters, and eventually, localized deities.  
-* **The Loop:** The player cannot fight. Their sole agency is economic and logistical. They provide rooms, broker localized quests, craft items, and manage the tavern lounge.  
+* **The Loop:** The player cannot fight. Their sole agency is quest generation, economic and logistical. They provide rooms, broker localized quests, craft items, and manage the tavern lounge.  
 * **The Emergence:** The narrative of the game is not pre-written. It emerges entirely from the mathematical friction of the engine. If a Rogue fails a stealth quest, the story of their failure is generated strictly from the exact variables that caused the math to fail.
 
 ## **2. Systematic Directory Structure**
