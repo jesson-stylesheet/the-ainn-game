@@ -251,6 +251,36 @@ async function viewPatrons(rl: readline.Interface): Promise<void> {
     }
 
     printCharacterSheet(patrons[idx]);
+
+    console.log(`\n  ${C.dim}Press [E] to Evict this patron, or Enter to go back.${C.reset}`);
+    const action = await askQuestion(rl, '  Action : ');
+    if (action.toUpperCase() === 'E') {
+        const p = patrons[idx];
+        if (p.state === 'ON_QUEST') {
+            console.log(`  ${C.red}✗ ${p.name} is currently on a quest and cannot be evicted.${C.reset}`);
+        } else {
+            const confirm = await askQuestion(rl, `  ${C.yellow}Are you sure you want to evict ${p.name}? (y/N): ${C.reset}`);
+            if (confirm.toLowerCase() === 'y' || confirm.toLowerCase() === 'yes') {
+                const ok = gameState.evictPatron(p.id);
+                if (ok) {
+                    console.log(`  ${C.green}✓ ${p.name} has been evicted from the inn.${C.reset}`);
+
+                    if (useDB) {
+                        try {
+                            // If there is an API or DB method for eviction, call it here.
+                            // Currently we might just delete from patrons table or update state.
+                            // Assuming we have db.updatePatronState
+                            // await db.updatePatronState(p.id, 'DEPARTED');
+                        } catch (e) {
+                            console.log(`  ${C.dim}DB logic for eviction not yet fully implemented: ${(e as Error).message}${C.reset}`);
+                        }
+                    }
+                } else {
+                    console.log(`  ${C.red}✗ Failed to evict patron.${C.reset}`);
+                }
+            }
+        }
+    }
 }
 
 function printCharacterSheet(p: IPatron): void {
@@ -722,7 +752,7 @@ async function tryPatronAutoQuest(patron: IPatron, force: boolean = false): Prom
 }
 
 async function summonPatron(rl: readline.Interface): Promise<void> {
-    const jobs = ['Warrior', 'Archer', 'Miner', 'Mechanic', 'Necromancer', 'Wizard', 'Berserker', 'Cleric', 'Geisha'];
+    const jobs = ['Warrior', 'Archer', 'Miner', 'Mechanic', 'Necromancer', 'Wizard', 'Berserker', 'Cleric', 'Geisha', 'Bard', 'Rogue', 'Artisan'];
     console.log(`\n  ${C.bright}Summon Options:${C.reset}`);
     for (let i = 0; i < jobs.length; i++) {
         console.log(`    ${C.cyan}${i + 1}${C.reset}. Random Race + ${jobs[i]}`);

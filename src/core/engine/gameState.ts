@@ -65,6 +65,27 @@ class GameState {
         }
     }
 
+    evictPatron(id: string, reason: string = 'Evicted by Innkeeper'): boolean {
+        const patron = this.patrons.get(id);
+        if (!patron) return false;
+
+        // Cannot evict if they are on a quest
+        if (patron.state === 'ON_QUEST') return false;
+
+        // Unequip all gear before evicting
+        for (const slotKey in patron.equipment) {
+            const slot = slotKey as EquipmentSlot;
+            if (patron.equipment[slot]) {
+                this.unequipItem(id, slot);
+            }
+        }
+
+        patron.state = 'DEPARTED';
+        eventBus.emit('patron:departed', { patron, reason });
+        this.patrons.delete(id);
+        return true;
+    }
+
     // ── Quests ──────────────────────────────────────────────────────────
 
     addQuest(quest: IQuest): void {

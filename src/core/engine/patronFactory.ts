@@ -86,6 +86,21 @@ const JOB_BLUEPRINTS: Record<Job, ArchetypeBlueprint> = {
         primarySkills: { Charisma: [14, 20], Agility: [14, 20], Curiosity: [14, 20], Cooking: [14, 20] },
         secondarySkills: { Navigation: [6, 12], BasicMagic: [6, 12], Bravery: [6, 12], Foraging: [6, 12], Defense: [6, 12], Dexterity: [6, 12] },
     },
+    bard: {
+        name: 'Bard',
+        primarySkills: { Charisma: [14, 20], Dexterity: [14, 20] },
+        secondarySkills: { Navigation: [6, 12], BasicMagic: [6, 12], Constitution: [6, 12] },
+    },
+    rogue: {
+        name: 'Rogue',
+        primarySkills: { Dexterity: [14, 20], Agility: [14, 20] },
+        secondarySkills: { MeleeWeapon: [6, 12], Curiosity: [6, 12], Foraging: [6, 12] },
+    },
+    artisan: {
+        name: 'Artisan',
+        primarySkills: { Crafting: [14, 20], Dexterity: [14, 20] },
+        secondarySkills: { Intelligent: [6, 12], Alchemy: [6, 12], Cooking: [6, 12] },
+    },
 };
 
 // ── Race Blueprints ─────────────────────────────────────────────────────
