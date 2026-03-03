@@ -11,7 +11,7 @@ async function testReputation() {
     console.log('Early Warrior (0 Rep) Skills:', earlyWarrior.skills.MeleeWeapon, earlyWarrior.skills.Defense, earlyWarrior.skills.Constitution);
 
     // 2. Play a Subjugation quest and win
-    const quest = parseQuestOffline('Slay the mighty dragon of the west');
+    const quest = parseQuestOffline('Slay the mighty dragon of the west', 0);
     quest.difficultyScalar = 35; // Should grant 35 / 5 = 7 rep
 
     gameState.addQuest(quest);

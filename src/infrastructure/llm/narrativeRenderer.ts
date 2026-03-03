@@ -10,11 +10,13 @@ import { chatCompletionStructured, chatCompletion } from './openRouterClient';
 import type { IPatron, IQuest, QuestResolutionResult, PatronHealthStatus } from '../../core/types/entity';
 import { ALL_SKILL_TAGS } from '../../core/types/entity';
 import { loreChronicle } from '../../core/engine/loreChronicle';
+import { CODEX_TOOLS, CODEX_HANDLERS } from './codexTools';
 
 // ── Centralized imports ────────────────────────────────────────────────
-import { RESOLUTION_SYSTEM_PROMPT, QUEST_PARSER_SYSTEM_PROMPT, ARRIVAL_SYSTEM_PROMPT, ITEM_DEDUP_SYSTEM_PROMPT, PATRON_QUEST_GEN_SYSTEM_PROMPT, GUARDIAN_QUESTION_PROMPT, GUARDIAN_SYNTHESIS_PROMPT } from './prompts/systemPrompts';
+import { RESOLUTION_SYSTEM_PROMPT, getQuestParserSystemPrompt, ARRIVAL_SYSTEM_PROMPT, ITEM_DEDUP_SYSTEM_PROMPT, PATRON_QUEST_GEN_SYSTEM_PROMPT, GUARDIAN_QUESTION_PROMPT, GUARDIAN_SYNTHESIS_PROMPT } from './prompts/systemPrompts';
 import { RESOLUTION_SCHEMA, QUEST_PARSE_SCHEMA, ITEM_DEDUP_SCHEMA, GUARDIAN_QUESTION_SCHEMA } from './schemas/jsonSchemas';
 import type { ResolutionNarrative, QuestParseResult, ItemDedupResult, GuardianQuestionResult } from './schemas/responseTypes';
+import { getSkillBudgetForReputation } from '../../core/engine/utils';
 
 // Re-export types so consumers don't need to change their imports
 export type { ResolutionNarrative, QuestParseResult, ItemDedupResult, GuardianQuestionResult };
@@ -51,7 +53,13 @@ MATH:
                 { role: 'user', content: prompt },
             ],
             RESOLUTION_SCHEMA,
-            { temperature: 0.8, maxTokens: 600 }
+            {
+                temperature: 0.8,
+                maxTokens: 600,
+                tools: CODEX_TOOLS,
+                toolHandlers: CODEX_HANDLERS,
+                tool_choice: 'auto'
+            }
         );
     } catch (error) {
         console.warn(`⚠ Structured resolution failed, using fallback:`, (error as Error).message);
@@ -64,15 +72,23 @@ MATH:
 /**
  * Parse quest text using the LLM with structured output.
  */
-export async function parseQuestStructured(text: string, inventoryContext: string = ''): Promise<QuestParseResult> {
+export async function parseQuestStructured(text: string, inventoryContext: string = '', innReputation: number = 0): Promise<QuestParseResult> {
     const contextStr = inventoryContext ? `\n\nINN INVENTORY (for crafting quests MUST USE):\n${inventoryContext}` : '';
+    const { minBudget, maxBudget } = getSkillBudgetForReputation(innReputation);
     return chatCompletionStructured<QuestParseResult>(
         [
-            { role: 'system', content: QUEST_PARSER_SYSTEM_PROMPT },
+            { role: 'system', content: getQuestParserSystemPrompt(minBudget, maxBudget) },
             { role: 'user', content: `Parse this quest:\n\n"${text}"${contextStr}` },
         ],
         QUEST_PARSE_SCHEMA,
-        { temperature: 0.2, maxTokens: 512 }
+        {
+            model: 'google/gemini-2.5-flash',
+            temperature: 0.2,
+            maxTokens: 512,
+            tools: CODEX_TOOLS,
+            toolHandlers: CODEX_HANDLERS,
+            tool_choice: 'auto'
+        }
     );
 }
 
@@ -244,7 +260,13 @@ export async function synthesizeLore(recentLore: string, questions: string[], an
                 { role: 'system', content: GUARDIAN_SYNTHESIS_PROMPT },
                 { role: 'user', content: prompt },
             ],
-            { temperature: 0.9, maxTokens: 500 }
+            {
+                temperature: 0.9,
+                maxTokens: 500,
+                tools: CODEX_TOOLS,
+                toolHandlers: CODEX_HANDLERS,
+                tool_choice: 'auto'
+            }
         );
     } catch (error) {
         console.warn(`⚠ Guardian synthesis failed, using fallback:`, (error as Error).message);

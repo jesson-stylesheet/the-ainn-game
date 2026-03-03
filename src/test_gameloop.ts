@@ -122,7 +122,7 @@ function main(): void {
 
     for (const { label, text } of verbosityTests) {
         const analysis = analyzeQuestVerbosity(text);
-        const quest = parseQuestText(text);
+        const quest = parseQuestText(text, gameState.reputation);
         const tagCount = ALL_SKILL_TAGS.filter(t => quest.requirements[t] > 0).length;
         const totalValue = ALL_SKILL_TAGS.reduce((sum, t) => sum + quest.requirements[t], 0);
 
@@ -162,7 +162,7 @@ function main(): void {
 
     const quests: IQuest[] = [];
     for (let i = 0; i < questTexts.length; i++) {
-        const quest = parseQuestText(questTexts[i]);
+        const quest = parseQuestText(questTexts[i], gameState.reputation);
         quest.deadlineTimestamp = Date.now() - 1000; // Already expired for testing
         quests.push(quest);
         gameState.addQuest(quest);
@@ -221,7 +221,7 @@ function main(): void {
 
     subheader('Phase 8: Probability — Nekomimi Geisha vs Dwarven Miner (Mining)');
 
-    const miningQuest = parseQuestText('Mine ore');
+    const miningQuest = parseQuestText('Mine ore', gameState.reputation);
     const geisha = createPatron('nekomimi', 'geisha', gameState.reputation);
     const miner = createPatron('dwarven', 'miner', gameState.reputation);
 

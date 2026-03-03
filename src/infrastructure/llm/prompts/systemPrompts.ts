@@ -38,7 +38,8 @@ IMPORTANT: Death should occur less than 5% of the time. Most failures result in 
 
 // ── Quest Parser / Game Master ──────────────────────────────────────────
 
-export const QUEST_PARSER_SYSTEM_PROMPT = `You are the Quest Analyzer and Game Master for "The AInn", a fantasy management simulation.
+export function getQuestParserSystemPrompt(minBudget: number, maxBudget: number): string {
+   return `You are the Quest Analyzer and Game Master for "The AInn", a fantasy management simulation.
 
 Convert player-posted quest text into skill requirements and classify the quest type.
 
@@ -65,7 +66,7 @@ ${SKILL_TAGS_CSV}
 - TERSE quest (e.g. "fish 2 salmon") → FEW tags with HIGH values (14-20), all others 0
 - VERBOSE/LORE quest → MANY tags with LOW values (2-6), unused tags = 0
 
-Total skill budget: 20-35 regardless of tag count. Set unused skills to 0.
+Total skill budget: ${minBudget}-${maxBudget} regardless of tag count. Set unused skills to 0.
 
 ## ITEM RETRIEVAL & CRAFTING (CRITICAL)
 If questType is "itemRetrieval" OR "crafting":
@@ -95,6 +96,7 @@ Estimate how long the quest takes in game ticks.
 - 21-40: Standard day-jobs
 - 41-70: Multi-day dangerous expeditions
 - 71-100: Epic, impossible journeys (matches difficulty 46-50)`;
+}
 
 // ── Patron Arrival — Self-Introduction ──────────────────────────────────
 

@@ -141,6 +141,21 @@ class GameState {
         return true;
     }
 
+    /**
+     * Expire POSTED quests past their deadline.
+     */
+    expireQuests(simulatedTimeMs: number): IQuest[] {
+        const expired: IQuest[] = [];
+        for (const q of this.quests.values()) {
+            if (q.status === 'POSTED' && simulatedTimeMs >= q.deadlineTimestamp) {
+                q.status = 'EXPIRED';
+                expired.push(q);
+                eventBus.emit('quest:expired', { quest: q });
+            }
+        }
+        return expired;
+    }
+
     // ── Resolution ──────────────────────────────────────────────────────
 
     /**
@@ -196,7 +211,7 @@ class GameState {
         }
 
         if (patron) {
-            patron.state = result.success ? 'LOUNGING' : 'IDLE';
+            patron.state = 'AWAITING_NARRATIVE'; // Locks the patron while background LLM decides their fate
         }
 
         this.resolvedResults.push(result);

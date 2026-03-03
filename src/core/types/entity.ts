@@ -40,7 +40,7 @@ export function createEmptySkillVector(): SkillVector {
 
 // ── Patron States ───────────────────────────────────────────────────────
 
-export type PatronState = 'IDLE' | 'LOUNGING' | 'ON_QUEST' | 'DEPARTED' | 'DEAD';
+export type PatronState = 'IDLE' | 'LOUNGING' | 'ON_QUEST' | 'AWAITING_NARRATIVE' | 'DEPARTED' | 'DEAD';
 
 // ── Patron Health ─────────────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ export interface IPatron {
 
 // ── Quest States & Types ────────────────────────────────────────────────
 
-export type QuestStatus = 'POSTED' | 'ACCEPTED' | 'FAILED' | 'COMPLETED';
+export type QuestStatus = 'POSTED' | 'ACCEPTED' | 'FAILED' | 'COMPLETED' | 'EXPIRED';
 
 export type QuestType = 'diplomacy' | 'itemRetrieval' | 'subjugation' | 'crafting';
 

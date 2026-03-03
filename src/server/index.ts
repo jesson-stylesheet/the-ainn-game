@@ -29,7 +29,13 @@ narrativeWorker.init();
 syncAdapter.init();
 
 // START THE ENGINE
-ticker.start();
+syncAdapter.hydrateGameState().then(() => {
+    ticker.start();
+    console.log('✅ Engine tick started after state hydration.');
+}).catch((e) => {
+    console.error('Failed to hydrate game state', e);
+    ticker.start(); // Start anyway as fallback
+});
 
 // ── REST API ────────────────────────────────────────────────────────────
 
@@ -57,7 +63,7 @@ app.post('/api/quests', async (req, res) => {
             return res.status(400).json({ error: 'Quest text is required' });
         }
 
-        const quest = await parseQuestWithLLM(text);
+        const quest = await parseQuestWithLLM(text, gameState.reputation);
         gameState.addQuest(quest);
         res.status(201).json(quest);
     } catch (e) {

@@ -16,6 +16,7 @@ export interface GameEvents {
     'patron:departed': { patron: IPatron; reason: string };
     'quest:posted': { quest: IQuest };
     'quest:accepted': { quest: IQuest; patron: IPatron };
+    'quest:expired': { quest: IQuest };
     'quest:resolved': { result: QuestResolutionResult; patron: IPatron; quest: IQuest };
     'item:added': { item: IItem };
     'narrative:completed': {

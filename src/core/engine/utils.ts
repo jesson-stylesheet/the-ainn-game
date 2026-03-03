@@ -46,3 +46,16 @@ export function clamp(value: number, min: number, max: number): number {
 export function rollD20(): number {
     return rollInt(1, 20);
 }
+
+/**
+ * Calculates the required skill budget for a quest based on the Inn's reputation.
+ * At 0 reputation, returns a budget bounds around 10-15.
+ * At 200+ reputation (approximate cap), returns bounds around 40-50.
+ */
+export function getSkillBudgetForReputation(reputation: number): { minBudget: number; maxBudget: number; targetBudget: number } {
+    const scale = Math.min(1.0, Math.max(0, reputation / 200));
+    const minBudget = Math.round(10 + scale * 30); // 10 to 40
+    const maxBudget = Math.round(15 + scale * 35); // 15 to 50
+    const targetBudget = Math.round((minBudget + maxBudget) / 2); // 13 to 45
+    return { minBudget, maxBudget, targetBudget };
+}

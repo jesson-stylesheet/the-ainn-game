@@ -26,7 +26,7 @@ const VALID_QUEST_TYPES: QuestType[] = ['diplomacy', 'itemRetrieval', 'subjugati
  * Parse quest text using the LLM via OpenRouter with structured output.
  * Falls back to mock parser on failure.
  */
-export async function parseQuestWithLLM(text: string): Promise<IQuest> {
+export async function parseQuestWithLLM(text: string, innReputation: number = 0): Promise<IQuest> {
     try {
         const innItems = gameState.getInnInventory();
         let inventoryContext = '';
@@ -36,7 +36,7 @@ export async function parseQuestWithLLM(text: string): Promise<IQuest> {
             inventoryContext = Array.from(summary.entries()).map(([k, v]) => `- ${v}x ${k}`).join('\n');
         }
 
-        const response = await parseQuestStructured(text, inventoryContext);
+        const response = await parseQuestStructured(text, inventoryContext, innReputation);
 
         // ── Legitimacy Check ───────────────────────────────────────────
         if (response.isLegitimate === false) {
@@ -74,14 +74,20 @@ export async function parseQuestWithLLM(text: string): Promise<IQuest> {
             : 20;
 
         // ── Difficulty Calibration ─────────────────────────────────────
-        // The sigmoid formula uses S - D, where S (coverage score) is
-        // bounded by the sum of quest requirements. If D exceeds that
-        // sum, even a perfect patron can never succeed. We cap D to
-        // 85% of total reqs so a perfect match yields P ≈ 70-90%.
+        // The LLM tries to guess difficulty, but our mathematical resolution
+        // hinges on S (coverage score) vs D (difficulty). If D > sum(Reqs),
+        // even a perfect patron fails. We calibrate D based on the actual
+        // skill requirements generated. A perfect patron should have a
+        // meaningful chance (e.g. 70-85%).
         const totalReqSum = ALL_SKILL_TAGS.reduce((sum, tag) => sum + vector[tag], 0);
         if (totalReqSum > 0) {
-            difficulty = Math.min(difficulty, Math.round(totalReqSum * 0.85));
-            difficulty = Math.max(10, difficulty); // Floor stays at 10
+            // Target scaling: D should generally be ~ 60-80% of total tags for a balanced quest.
+            // A quest shouldn't have D out of bounds from its actual requirements.
+            const minBalancedD = Math.max(10, Math.round(totalReqSum * 0.40));
+            const maxBalancedD = Math.min(50, Math.round(totalReqSum * 0.85));
+
+            // Clamp the LLM's difficulty into a mathematically sane range
+            difficulty = Math.max(minBalancedD, Math.min(maxBalancedD, difficulty));
         }
 
         // Build item details if applicable
@@ -141,4 +147,7 @@ export async function parseQuestWithLLM(text: string): Promise<IQuest> {
     }
 }
 
-export { mockParseQuestText as parseQuestOffline };
+// We export this as a wrapper so that it matches parseQuestWithLLM's signature.
+export function parseQuestOffline(text: string, innReputation: number = 0) {
+    return mockParseQuestText(text, innReputation);
+}

@@ -12,6 +12,10 @@ import type {
     IPatron, IQuest, QuestResolutionResult, SkillVector,
     IItem, ItemCategory, ItemLocation, EquipmentSlot,
 } from '../../core/types/entity';
+import type {
+    ICodexMob, ICodexItem, ICodexCharacter, ICodexFaction,
+    ICodexRecipe, ICodexRecipeMaterial
+} from '../../core/types/codex';
 
 // ── Row Types (DB shape) ────────────────────────────────────────────────
 
@@ -203,6 +207,30 @@ export async function updateItemLocation(
 export async function deleteItem(id: string): Promise<void> {
     const { error } = await supabase.from('items').delete().eq('id', id);
     if (error) throw new Error(`Failed to delete item: ${error.message}`);
+}
+
+/** Consumes items directly from the database INN_VAULT, matching the GameState logic. */
+export async function consumeInnItemFromDB(itemName: string, quantity: number): Promise<void> {
+    const { data: items, error } = await supabase
+        .from('items')
+        .select('*')
+        .eq('location', 'INN_VAULT')
+        .ilike('name', itemName); // GameState uses name.toLowerCase() === name.toLowerCase()
+
+    if (error) throw new Error(`Failed to fetch items for consumption: ${error.message}`);
+
+    let needed = quantity;
+    for (const item of (items as ItemRow[])) {
+        if (needed <= 0) break;
+        if (item.quantity <= needed) {
+            needed -= item.quantity;
+            await deleteItem(item.id);
+        } else {
+            const newQuantity = item.quantity - needed;
+            await supabase.from('items').update({ quantity: newQuantity }).eq('id', item.id);
+            needed = 0;
+        }
+    }
 }
 
 function rowToItem(row: ItemRow): IItem {
@@ -487,6 +515,145 @@ export async function logEvent(
         p_game_tick: gameTick ?? null,
     });
     if (error) throw new Error(`Failed to log event: ${error.message}`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  WORLD CODEX
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Normalizes entity names to prevent duplicates from typos/casing.
+ * e.g., " crimson   DEATHstalker " -> "Crimson Deathstalker"
+ */
+function sanitizeName(name: string): string {
+    if (!name) return name;
+    return name
+        .trim()
+        .replace(/\s+/g, ' ')
+        .split(' ')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+}
+
+export async function insertCodexMob(mob: ICodexMob): Promise<ICodexMob> {
+    const cleanName = sanitizeName(mob.name);
+
+    // Check if it already exists to prevent duplicate key errors and gracefully return the existing entry
+    const existing = await searchCodexMobByName(cleanName);
+    if (existing) return existing;
+
+    const { data, error } = await supabase.from('codex_mobs').insert({
+        id: mob.id, name: cleanName, description: mob.description,
+        danger_level: mob.dangerLevel, habitat: mob.habitat
+    }).select().single();
+    if (error) throw new Error(`Failed to insert codex mob: ${error.message}`);
+    return { ...mob, name: cleanName, id: data.id, discoveredAt: data.discovered_at };
+}
+
+export async function searchCodexMobByName(nameQuery: string): Promise<ICodexMob | null> {
+    const cleanQuery = sanitizeName(nameQuery);
+    const { data, error } = await supabase.from('codex_mobs').select('*').ilike('name', `%${cleanQuery}%`).limit(1).maybeSingle();
+    if (error) throw new Error(`Failed to search codex mob: ${error.message}`);
+    if (!data) return null;
+    return { id: data.id, name: data.name, description: data.description, dangerLevel: data.danger_level, habitat: data.habitat, discoveredAt: data.discovered_at };
+}
+
+export async function insertCodexItem(item: ICodexItem): Promise<ICodexItem> {
+    const cleanName = sanitizeName(item.name);
+
+    const existing = await searchCodexItemByName(cleanName);
+    if (existing) return existing;
+
+    const { data, error } = await supabase.from('codex_items').insert({
+        id: item.id, name: cleanName, description: item.description,
+        category: item.category, rarity: item.rarity
+    }).select().single();
+    if (error) throw new Error(`Failed to insert codex item: ${error.message}`);
+    return { ...item, name: cleanName, id: data.id, discoveredAt: data.discovered_at };
+}
+
+export async function searchCodexItemByName(nameQuery: string): Promise<ICodexItem | null> {
+    const cleanQuery = sanitizeName(nameQuery);
+    const { data, error } = await supabase.from('codex_items').select('*').ilike('name', `%${cleanQuery}%`).limit(1).maybeSingle();
+    if (error) throw new Error(`Failed to search codex item: ${error.message}`);
+    if (!data) return null;
+    return { id: data.id, name: data.name, description: data.description, category: data.category as ItemCategory, rarity: data.rarity, discoveredAt: data.discovered_at };
+}
+
+export async function insertCodexCharacter(character: ICodexCharacter): Promise<ICodexCharacter> {
+    const cleanName = sanitizeName(character.name);
+
+    const existing = await searchCodexCharacterByName(cleanName);
+    if (existing) return existing;
+
+    const { data, error } = await supabase.from('codex_characters').insert({
+        id: character.id, name: cleanName, description: character.description,
+        character_type: character.characterType, patron_id: character.patronId
+    }).select().single();
+    if (error) throw new Error(`Failed to insert codex character: ${error.message}`);
+    return { ...character, name: cleanName, id: data.id, discoveredAt: data.discovered_at };
+}
+
+export async function searchCodexCharacterByName(nameQuery: string): Promise<ICodexCharacter | null> {
+    const cleanQuery = sanitizeName(nameQuery);
+    const { data, error } = await supabase.from('codex_characters').select('*').ilike('name', `%${cleanQuery}%`).limit(1).maybeSingle();
+    if (error) throw new Error(`Failed to search codex character: ${error.message}`);
+    if (!data) return null;
+    return { id: data.id, name: data.name, description: data.description, characterType: data.character_type, patronId: data.patron_id, discoveredAt: data.discovered_at };
+}
+
+export async function insertCodexFaction(faction: ICodexFaction): Promise<ICodexFaction> {
+    const cleanName = sanitizeName(faction.name);
+
+    const existing = await searchCodexFactionByName(cleanName);
+    if (existing) return existing;
+
+    const { data, error } = await supabase.from('codex_factions').insert({
+        id: faction.id, name: cleanName, description: faction.description, alignment: faction.alignment
+    }).select().single();
+    if (error) throw new Error(`Failed to insert codex faction: ${error.message}`);
+    return { ...faction, name: cleanName, id: data.id, discoveredAt: data.discovered_at };
+}
+
+export async function searchCodexFactionByName(nameQuery: string): Promise<ICodexFaction | null> {
+    const cleanQuery = sanitizeName(nameQuery);
+    const { data, error } = await supabase.from('codex_factions').select('*').ilike('name', `%${cleanQuery}%`).limit(1).maybeSingle();
+    if (error) throw new Error(`Failed to search codex faction: ${error.message}`);
+    if (!data) return null;
+    return { id: data.id, name: data.name, description: data.description, alignment: data.alignment, discoveredAt: data.discovered_at };
+}
+
+export async function insertCodexRecipe(recipe: ICodexRecipe, materials: ICodexRecipeMaterial[]): Promise<ICodexRecipe> {
+    const cleanName = sanitizeName(recipe.name);
+
+    const existing = await searchCodexRecipeByName(cleanName);
+    if (existing) return existing;
+
+    const { data, error } = await supabase.from('codex_recipes').insert({
+        id: recipe.id, name: cleanName, description: recipe.description, crafted_item_id: recipe.craftedItemId
+    }).select().single();
+    if (error) throw new Error(`Failed to insert codex recipe: ${error.message}`);
+
+    // Insert materials
+    if (materials.length > 0) {
+        const materialRows = materials.map(m => ({
+            recipe_id: data.id,
+            material_item_id: m.materialItemId,
+            quantity: m.quantity
+        }));
+        const { error: matError } = await supabase.from('codex_recipe_materials').insert(materialRows);
+        if (matError) throw new Error(`Failed to insert codex recipe materials: ${matError.message}`);
+    }
+
+    return { ...recipe, name: cleanName, id: data.id, discoveredAt: data.discovered_at };
+}
+
+export async function searchCodexRecipeByName(nameQuery: string): Promise<ICodexRecipe | null> {
+    const cleanQuery = sanitizeName(nameQuery);
+    const { data, error } = await supabase.from('codex_recipes').select('*').ilike('name', `%${cleanQuery}%`).limit(1).maybeSingle();
+    if (error) throw new Error(`Failed to search codex recipe: ${error.message}`);
+    if (!data) return null;
+    return { id: data.id, name: data.name, description: data.description, craftedItemId: data.crafted_item_id, discoveredAt: data.discovered_at };
 }
 
 export async function fetchRecentEvents(count: number = 20): Promise<Record<string, unknown>[]> {

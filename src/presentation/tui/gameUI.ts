@@ -182,7 +182,7 @@ async function postQuest(rl: readline.Interface): Promise<void> {
     if (useLLM) {
         console.log(`  ${C.dim}Sending to LLM...${C.reset}`);
         try {
-            quest = await parseQuestWithLLM(text);
+            quest = await parseQuestWithLLM(text, gameState.reputation);
         } catch (e) {
             const errName = (e as Error).message;
             if (errName.startsWith('LEGITIMACY_REJECTED:')) {
@@ -196,7 +196,7 @@ async function postQuest(rl: readline.Interface): Promise<void> {
             return;
         }
     } else {
-        quest = parseQuestText(text);
+        quest = parseQuestText(text, gameState.reputation);
     }
 
     const tagCount = ALL_SKILL_TAGS.filter(t => quest.requirements[t] > 0).length;
@@ -728,7 +728,7 @@ async function tryPatronAutoQuest(patron: IPatron, force: boolean = false): Prom
         console.log(`  ${C.dim}"${questText}"${C.reset}`);
 
         // Feed the generated text through the normal quest parser
-        const quest = await parseQuestWithLLM(questText);
+        const quest = await parseQuestWithLLM(questText, gameState.reputation);
         quest.postedByPatronId = patron.id;
         gameState.addQuest(quest);
 

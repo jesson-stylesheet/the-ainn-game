@@ -31,13 +31,6 @@ import { generateUUID, rollInt } from './utils';
 // ── Verbosity Constants ─────────────────────────────────────────────────
 
 /**
- * The total "skill budget" a quest distributes across its tags.
- * This stays roughly constant regardless of how many tags are active.
- * More tags = budget spread thinner. Fewer tags = budget concentrated.
- */
-const QUEST_SKILL_BUDGET = 30;
-
-/**
  * Minimum value any active tag can have after verbosity scaling.
  * Prevents tags from becoming meaningless noise.
  */
@@ -261,6 +254,8 @@ function analyzeVerbosity(words: string[], keywordHits: number, uniqueTags: numb
     };
 }
 
+import { getSkillBudgetForReputation } from './utils';
+
 // ── Parser ──────────────────────────────────────────────────────────────
 
 /**
@@ -281,7 +276,7 @@ function analyzeVerbosity(words: string[], keywordHits: number, uniqueTags: numb
  * This is the mock LLM. In production, the LLM will determine the tags
  * using the same verbosity→value inverse scaling principle.
  */
-export function parseQuestText(text: string): IQuest {
+export function parseQuestText(text: string, innReputation: number = 0): IQuest {
     const words = text.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 0);
 
     // Step 1: Collect raw priority scores for each tag from keyword hits
@@ -317,6 +312,7 @@ export function parseQuestText(text: string): IQuest {
     //
     // High verbosity → many tags at low values (budget spread thin)
     // Low verbosity  → few tags at high values (budget concentrated)
+    const { targetBudget } = getSkillBudgetForReputation(innReputation);
     const vector = createEmptySkillVector();
     const totalPriority = Object.values(rawPriorities).reduce((s, v) => s + (v ?? 0), 0);
 
@@ -325,8 +321,8 @@ export function parseQuestText(text: string): IQuest {
             const priority = rawPriorities[tag] ?? 0;
             const share = priority / totalPriority; // Proportional share of budget
 
-            // Base value from budget share
-            let value = Math.round(QUEST_SKILL_BUDGET * share);
+            // Base value from dynamic budget share
+            let value = Math.round(targetBudget * share);
 
             // Apply verbosity scaling:
             // Terse quests amplify values, verbose quests compress them

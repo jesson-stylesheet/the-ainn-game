@@ -63,6 +63,9 @@ class Ticker {
 
         eventBus.emit('tick', { simulatedTime: simTime, tickCount: this.tickCount });
 
+        // Expire timed-out quests
+        gameState.expireQuests(simTime);
+
         // Tick all active quests down and get the ones ready to resolve
         const resolvingQuests = gameState.tickActiveQuests();
 

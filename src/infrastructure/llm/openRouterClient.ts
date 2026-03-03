@@ -28,8 +28,15 @@ if (!OPENROUTER_API_KEY) {
 // ── Types ───────────────────────────────────────────────────────────────
 
 interface ChatMessage {
-    role: 'system' | 'user' | 'assistant';
-    content: string;
+    role: 'system' | 'user' | 'assistant' | 'tool';
+    content: string | null;
+    tool_calls?: {
+        id: string;
+        type: 'function';
+        function: { name: string; arguments: string; };
+    }[];
+    tool_call_id?: string;
+    name?: string;
 }
 
 /** JSON Schema definition for structured outputs. */
@@ -44,7 +51,12 @@ interface OpenRouterResponse {
     choices: {
         message: {
             role: string;
-            content: string;
+            content: string | null;
+            tool_calls?: {
+                id: string;
+                type: 'function';
+                function: { name: string; arguments: string; };
+            }[];
         };
         finish_reason: string;
     }[];
@@ -55,11 +67,25 @@ interface OpenRouterResponse {
     };
 }
 
+export interface ToolDefinition {
+    type: 'function';
+    function: {
+        name: string;
+        description: string;
+        parameters: Record<string, unknown>;
+    };
+}
+
+export type ToolHandlerRegistry = Record<string, (args: any) => Promise<any>>;
+
 export interface LLMOptions {
     model?: string;
     temperature?: number;
     maxTokens?: number;
     timeoutMs?: number;
+    tools?: ToolDefinition[];
+    tool_choice?: 'auto' | 'any' | 'none' | { type: 'function', function: { name: string } };
+    toolHandlers?: ToolHandlerRegistry;
 }
 
 // ── Core API Call (free-form text) ───────────────────────────────────────
@@ -68,7 +94,7 @@ export interface LLMOptions {
  * Send a chat completion request to OpenRouter. Returns raw text.
  */
 export async function chatCompletion(
-    messages: ChatMessage[],
+    inputMessages: ChatMessage[],
     options: LLMOptions = {}
 ): Promise<string> {
     if (!OPENROUTER_API_KEY) {
@@ -80,50 +106,86 @@ export async function chatCompletion(
         temperature = 0.3,
         maxTokens = 1024,
         timeoutMs = 60000,
+        tools,
+        tool_choice,
+        toolHandlers
     } = options;
 
-    const response = await fetch(OPENROUTER_BASE_URL, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://the-ainn.game',
-            'X-Title': 'The AInn Engine',
-        },
-        body: JSON.stringify({
-            model,
-            messages,
-            temperature,
-            max_tokens: maxTokens,
-        }),
-        signal: AbortSignal.timeout(timeoutMs),
-    });
+    const messages = [...inputMessages];
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
+    while (true) {
+        const body: any = { model, messages, temperature, max_tokens: maxTokens };
+        if (tools && tools.length > 0) {
+            body.tools = tools;
+            if (tool_choice) body.tool_choice = tool_choice;
+        }
+
+        const response = await fetch(OPENROUTER_BASE_URL, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://the-ainn.game',
+                'X-Title': 'The AInn Engine',
+            },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(timeoutMs),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
+        }
+
+        const data = (await response.json()) as OpenRouterResponse;
+        if (!data.choices || data.choices.length === 0) {
+            throw new Error('OpenRouter returned no choices');
+        }
+
+        const message = data.choices[0].message;
+        const finishReason = data.choices[0].finish_reason;
+
+        if (finishReason === 'tool_calls' && message.tool_calls && toolHandlers) {
+            messages.push(message as ChatMessage);
+            for (const call of message.tool_calls) {
+                if (call.type === 'function') {
+                    let result;
+                    const handler = toolHandlers[call.function.name];
+                    if (handler) {
+                        try {
+                            const args = JSON.parse(call.function.arguments);
+                            console.log(`\n  🧩 [LLM Tool Call] ${call.function.name}`, args);
+                            result = await handler(args);
+                            console.log(`  ✅ [LLM Tool Result]`, result);
+                        } catch (e: any) {
+                            console.error(`  ❌ [LLM Tool Error] ${call.function.name}:`, e.message);
+                            result = { error: e.message };
+                        }
+                    } else {
+                        result = { error: `Tool ${call.function.name} not found` };
+                    }
+                    messages.push({
+                        role: 'tool',
+                        content: JSON.stringify(result),
+                        tool_call_id: call.id,
+                        name: call.function.name
+                    });
+                }
+            }
+            continue;
+        }
+
+        return message.content || '';
     }
-
-    const data = (await response.json()) as OpenRouterResponse;
-
-    if (!data.choices || data.choices.length === 0) {
-        throw new Error('OpenRouter returned no choices');
-    }
-
-    return data.choices[0].message.content;
 }
 
 // ── Structured Output (JSON Schema) ─────────────────────────────────────
 
 /**
  * Send a chat completion with structured output enforcement.
- * OpenRouter validates the response against the provided JSON Schema.
- * This guarantees type-safe, parseable responses.
- *
- * @see https://openrouter.ai/docs/guides/features/structured-outputs
  */
 export async function chatCompletionStructured<T>(
-    messages: ChatMessage[],
+    inputMessages: ChatMessage[],
     jsonSchema: JsonSchemaDefinition,
     options: LLMOptions = {}
 ): Promise<T> {
@@ -136,46 +198,85 @@ export async function chatCompletionStructured<T>(
         temperature = 0.3,
         maxTokens = 1024,
         timeoutMs = 60000,
+        tools,
+        tool_choice,
+        toolHandlers
     } = options;
 
-    const response = await fetch(OPENROUTER_BASE_URL, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://the-ainn.game',
-            'X-Title': 'The AInn Engine',
-        },
-        body: JSON.stringify({
-            model,
-            messages,
-            temperature,
-            max_tokens: maxTokens,
-            response_format: {
-                type: 'json_schema',
-                json_schema: jsonSchema,
+    const messages = [...inputMessages];
+
+    while (true) {
+        const body: any = {
+            model, messages, temperature, max_tokens: maxTokens,
+            response_format: { type: 'json_schema', json_schema: jsonSchema }
+        };
+        if (tools && tools.length > 0) {
+            body.tools = tools;
+            if (tool_choice) body.tool_choice = tool_choice;
+        }
+
+        const response = await fetch(OPENROUTER_BASE_URL, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://the-ainn.game',
+                'X-Title': 'The AInn Engine',
             },
-        }),
-        signal: AbortSignal.timeout(timeoutMs),
-    });
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(timeoutMs),
+        });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
-    }
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
+        }
 
-    const data = (await response.json()) as OpenRouterResponse;
+        const data = (await response.json()) as OpenRouterResponse;
+        if (!data.choices || data.choices.length === 0) {
+            throw new Error('OpenRouter returned no choices');
+        }
 
-    if (!data.choices || data.choices.length === 0) {
-        throw new Error('OpenRouter returned no choices');
-    }
+        const message = data.choices[0].message;
+        const finishReason = data.choices[0].finish_reason;
 
-    const raw = data.choices[0].message.content;
-    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        if (finishReason === 'tool_calls' && message.tool_calls && toolHandlers) {
+            messages.push(message as ChatMessage);
+            for (const call of message.tool_calls) {
+                if (call.type === 'function') {
+                    let result;
+                    const handler = toolHandlers[call.function.name];
+                    if (handler) {
+                        try {
+                            const args = JSON.parse(call.function.arguments);
+                            console.log(`\n  🧩 [LLM Tool Call] ${call.function.name}`, args);
+                            result = await handler(args);
+                            console.log(`  ✅ [LLM Tool Result]`, result);
+                        } catch (e: any) {
+                            console.error(`  ❌ [LLM Tool Error] ${call.function.name}:`, e.message);
+                            result = { error: e.message };
+                        }
+                    } else {
+                        result = { error: `Tool ${call.function.name} not found` };
+                    }
+                    messages.push({
+                        role: 'tool',
+                        content: JSON.stringify(result),
+                        tool_call_id: call.id,
+                        name: call.function.name
+                    });
+                }
+            }
+            continue;
+        }
 
-    try {
-        return JSON.parse(cleaned) as T;
-    } catch {
-        throw new Error(`Failed to parse structured LLM response: ${cleaned.slice(0, 200)}`);
+        const raw = message.content || '';
+        const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+        try {
+            return JSON.parse(cleaned) as T;
+        } catch {
+            throw new Error(`Failed to parse structured LLM response: ${cleaned.slice(0, 200)}`);
+        }
     }
 }

@@ -33,6 +33,9 @@ class NarrativeWorker {
                     actualPatron.healthStatus = resolution.patron_health;
                     if (resolution.patron_health === 'DEAD') {
                         actualPatron.state = 'DEAD';
+                    } else {
+                        // Release from AWAITING_NARRATIVE
+                        actualPatron.state = result.success ? 'LOUNGING' : 'IDLE';
                     }
                 }
 

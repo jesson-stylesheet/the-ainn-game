@@ -12,12 +12,61 @@ import { gameState } from '../../core/engine/gameState';
 
 class DBSyncAdapter {
     private initialized = false;
+    private isHydrating = false;
+
+    async hydrateGameState(): Promise<boolean> {
+        const isDBEnabled = process.env.USE_DB === 'true';
+        if (!isDBEnabled) return false;
+
+        this.isHydrating = true;
+        try {
+            console.log('\n[DBSync] Hydrating game state from Supabase...');
+
+            // 1. Inn State
+            try {
+                const innState = await db.fetchInnState();
+                gameState.setInnState(innState);
+            } catch (e) {
+                console.warn(`[DBSync] No inn state found, defaulting. ${e}`);
+            }
+
+            // 2. Patrons
+            const patrons = await db.fetchAllPatrons();
+            for (const p of patrons) {
+                // We use addPatron which emits the event, but we block the DB write
+                gameState.addPatron(p);
+            }
+
+            // 3. Quests (Only active/posted ones needed for engine loop)
+            const activeQuests = [
+                ...(await db.fetchQuestsByStatus('POSTED')),
+                ...(await db.fetchQuestsByStatus('ACCEPTED'))
+            ];
+            for (const q of activeQuests) {
+                gameState.addQuest(q);
+            }
+
+            // 4. Items
+            const items = await db.fetchAllItems();
+            for (const item of items) {
+                gameState.addItem(item);
+            }
+
+            console.log(`[DBSync] Hydration complete: ${patrons.length} patrons, ${activeQuests.length} quests, ${items.length} items.`);
+            return true;
+        } catch (e) {
+            console.error('[DBSync] Hydration completely failed:', e);
+            return false;
+        } finally {
+            this.isHydrating = false;
+        }
+    }
 
     init(): void {
         if (this.initialized) return;
         this.initialized = true;
 
-        const isDBEnabled = () => process.env.USE_DB === 'true'; // Fallback toggle for server
+        const isDBEnabled = () => process.env.USE_DB === 'true' && !this.isHydrating; // Block outgoing sync if hydrating
 
         // ── Patrons
         eventBus.on('patron:arrived', async ({ patron }) => {
@@ -42,6 +91,12 @@ class DBSyncAdapter {
             catch (e) { console.error(`[DBSync] quest:posted failed:`, e); }
         });
 
+        eventBus.on('quest:expired', async ({ quest }) => {
+            if (!isDBEnabled()) return;
+            try { await db.updateQuestStatus(quest.id, 'EXPIRED'); }
+            catch (e) { console.error(`[DBSync] quest:expired failed:`, e); }
+        });
+
         eventBus.on('quest:accepted', async ({ quest, patron }) => {
             if (!isDBEnabled()) return;
             try {
@@ -49,12 +104,9 @@ class DBSyncAdapter {
 
                 // If it was a crafting quest, we must also update the DB to reflect consumed items.
                 if (quest.type === 'crafting' && quest.consumedItems) {
-                    // Since GameState already deleted the consumed items from memory,
-                    // we should ideally sync the exact item rows that were deleted.
-                    // A simple way here is to just reload all inn vault items and reconcile,
-                    // but for now, we'll assume the client/server will handle a full inventory refresh
-                    // or we delete them explicitly here if we had their IDs.
-                    // (The current queries.ts doesn't have a 'deleteItemsByNamesAndQuantities' function).
+                    for (const req of quest.consumedItems) {
+                        await db.consumeInnItemFromDB(req.itemName, req.quantity);
+                    }
                 }
             }
             catch (e) { console.error(`[DBSync] quest:accepted failed:`, e); }
@@ -65,6 +117,13 @@ class DBSyncAdapter {
             if (!isDBEnabled()) return;
             try { await db.insertItem(item); }
             catch (e) { console.error(`[DBSync] item:added failed:`, e); }
+        });
+
+        // ── Inn State
+        eventBus.on('inn:reputation_gained', async ({ total }) => {
+            if (!isDBEnabled()) return;
+            try { await db.updateInnState({ reputation: total }); }
+            catch (e) { console.error(`[DBSync] inn:reputation_gained failed:`, e); }
         });
 
         // ── Narrative / Resolution
