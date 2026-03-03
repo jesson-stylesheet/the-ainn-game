@@ -920,6 +920,9 @@ export async function startTUI(): Promise<void> {
 
         console.log(`     ${healthColor}♥ ${patronName}: ${data.patronHealth}${C.reset}${data.injuryDescription ? ` — ${C.dim}${data.injuryDescription}${C.reset}` : ''}`);
         console.log(`     ${C.gray}📚 Lore: ${data.loreEntry.slice(0, 80)}...${C.reset}\n`);
+
+        // Refresh status to show incremented lore count
+        showStatus();
         rl.prompt(true);
     });
 

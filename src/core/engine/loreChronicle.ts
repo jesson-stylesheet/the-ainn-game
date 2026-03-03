@@ -155,6 +155,17 @@ class LoreChronicle {
         return this.entries.length;
     }
 
+    /**
+     * Hydrate the chronicle from a list of entries (usually from DB).
+     */
+    hydrate(entries: LoreEntry[]): void {
+        this.entries = [...entries];
+        // We assume all loaded entries are already "acknowledged" by a prior synthesis
+        // or we just reset the counter to 0 upon start to avoid instant Guardian trigger
+        // unless the user specifically wants to catch up.
+        this.unacknowledgedCount = 0;
+    }
+
     /** Reset for testing. */
     reset(): void {
         this.entries = [];

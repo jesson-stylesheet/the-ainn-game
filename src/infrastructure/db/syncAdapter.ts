@@ -53,6 +53,27 @@ class DBSyncAdapter {
                 gameState.addItem(item);
             }
 
+            // 5. Lore
+            try {
+                const loreRows = await db.fetchAllLoreEntries();
+                const loreEntries = loreRows.map(row => ({
+                    timestamp: new Date(row.created_at).getTime(),
+                    questId: row.quest_id,
+                    originalText: row.original_text,
+                    outcome: row.outcome as any,
+                    patronName: row.patron_name,
+                    patronArchetype: row.patron_archetype,
+                    loreText: row.lore_text,
+                    storyText: row.story_text,
+                }));
+                import('../../core/engine/loreChronicle').then(({ loreChronicle }) => {
+                    loreChronicle.hydrate(loreEntries);
+                });
+                console.log(`[DBSync] Lore hydrated: ${loreEntries.length} entries.`);
+            } catch (e) {
+                console.warn(`[DBSync] Failed to hydrate lore: ${e}`);
+            }
+
             console.log(`[DBSync] Hydration complete: ${patrons.length} patrons, ${activeQuests.length} quests, ${items.length} items.`);
             return true;
         } catch (e) {
@@ -182,12 +203,15 @@ class DBSyncAdapter {
                     // 3. Insert Lore
                     await db.insertLoreEntry({
                         questId: data.questId,
+                        patronId: data.patronId,
                         originalText: quest ? quest.originalText : 'Unknown Quest Text',
                         outcome: data.success ? 'COMPLETED' : 'FAILED',
                         patronName: patron ? patron.name : 'Unknown',
                         patronArchetype: patron ? patron.archetype : 'Unknown',
-                        narrativeSeed: data.loreEntry
+                        loreText: data.loreEntry,
+                        storyText: data.story
                     });
+                    console.log(`[DBSync] Lore entry saved for quest: ${data.questId}`);
                 } catch (e) {
                     console.error(`[DBSync] narrative:completed failed in queue:`, e);
                 }

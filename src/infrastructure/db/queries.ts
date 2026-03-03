@@ -532,14 +532,13 @@ export async function updateLoreOutcome(
     if (error) throw new Error(`Failed to update lore: ${error.message}`);
 }
 
-export async function fetchRecentLore(count: number): Promise<LoreRow[]> {
+export async function fetchAllLoreEntries(): Promise<LoreRow[]> {
     const { data, error } = await supabase
         .from('lore_chronicle')
         .select('*')
         .eq('inn_id', gameState.innId)
-        .order('created_at', { ascending: false })
-        .limit(count);
-    if (error) throw new Error(`Failed to fetch lore: ${error.message}`);
+        .order('created_at', { ascending: true }); // Chronological for hydration
+    if (error) throw new Error(`Failed to fetch all lore: ${error.message}`);
     return data as LoreRow[];
 }
 
