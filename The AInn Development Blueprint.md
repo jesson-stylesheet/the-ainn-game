@@ -73,7 +73,7 @@ Quests are resolved when their deadline expires using a Sigmoid resolution funct
 All LLM queries flow through OpenRouter using Google AI Studio explicitly. Models are strictly pinned to their ideal use-cases:
 
 - `google/gemini-3-flash-preview`: Used exclusively for creative narrative rendering. Maps resolution math into immersive stories, handles The Lore Guardian's esoteric dialogue, and formats daily reflections.
-- `google/gemini-2.5-flash`: Used for structural and systemic logic. Parses player quests into JSON schemas, executes recursive tool-calling pipelines, runs background deduplication scripts for equipment, and acts as the background Codex Synchroniser.
+- `google/gemini-3.1-flash-lite-preview`: Used for structural and systemic logic. Parses player quests into JSON schemas, executes recursive tool-calling pipelines, runs background deduplication scripts for equipment, and acts as the background Codex Synchroniser.
 
 ## **7. Retrieval-Augmented Generation (RAG) & The World Codex**
 

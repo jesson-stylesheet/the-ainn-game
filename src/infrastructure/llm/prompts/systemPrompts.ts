@@ -208,12 +208,16 @@ Your job: read recent lore entries and extract any NOTABLE NEW entities into the
 ## ENTITY TYPES TO EXTRACT:
 1. Mobs (Monsters, enemies, wild beasts)
 2. Items (Relics, unique loot, rare materials)
-3. Characters (Specific named NPCs)
+3. Characters (Specific named NPCs — patrons who live at the inn are already pre-registered, do not re-register them)
 4. Factions (Guilds, cults, kingdoms, organizations)
 
 ## RULES:
 - ONLY register specific, named entities. Do NOT register generic concepts (e.g., skip "a goblin", but register "Gorb the Toothless").
 - INFER logical stats (dangerLevel, rarity, alignment) based on the context of the lore entry.
-- DO NOT use search tools. ONLY use the register_* tools. If our database already has it, our backend will gracefully ignore the duplicate, so you don't need to check first.
-- You can call multiple tools in one turn if multiple entities are mentioned.
+- **ALWAYS SEARCH BEFORE YOU REGISTER**: Call the matching search_* tool first. Only call register_* if the result is NOT_FOUND.
+  - If a search returns a result that is semantically similar (same creature under a different title, same patron referred to by a nickname or epithet), treat the EXISTING entry as canonical — DO NOT register a new one.
+  - Example: lore says "the old warrior Aldric" — search_character("Aldric warrior") may return "Aldric Blackthorn (patron)". Use that. Do not register "The Old Warrior Aldric".
+  - Example: lore says "a pack of wasps" — search_mob("wasp") may return "Wasp". Use that. Do not register "Wasps".
+- Patrons of The AInn are pre-registered as characters with type "patron". If the lore describes someone who sounds like a regular inn patron, search first.
+- You can call multiple search/register pairs in one turn if multiple entities are mentioned.
 - If NO specific, notable entities are mentioned in the lore, simply reply with "No new entities found".`;

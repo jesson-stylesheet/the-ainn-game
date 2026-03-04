@@ -85,7 +85,7 @@ export async function parseQuestStructured(text: string, inventoryContext: strin
         ],
         QUEST_PARSE_SCHEMA,
         {
-            model: 'google/gemini-2.5-flash',
+            model: 'google/gemini-3.1-flash-lite-preview',
             temperature: 0.2,
             maxTokens: 512,
             tools: CODEX_SEARCH_TOOLS,
@@ -121,7 +121,7 @@ export async function deduplicateItemName(
                 },
             ],
             ITEM_DEDUP_SCHEMA,
-            { model: 'google/gemini-2.5-flash', temperature: 0.1, maxTokens: 256 }
+            { model: 'google/gemini-3.1-flash-lite-preview', temperature: 0.1, maxTokens: 256 }
         );
 
         return {
@@ -250,7 +250,7 @@ export async function generateGuardianQuestions(recentLore: string): Promise<Gua
             ],
             GUARDIAN_QUESTION_SCHEMA,
             {
-                model: 'google/gemini-2.5-flash',
+                model: 'google/gemini-3.1-flash-lite-preview',
                 temperature: 0.1,
                 maxTokens: 512,
                 tools: CODEX_FULL_TOOLS,
@@ -290,7 +290,7 @@ export async function synthesizeLore(recentLore: string, questions: string[], an
                 { role: 'user', content: prompt },
             ],
             {
-                model: 'google/gemini-2.5-flash',
+                model: 'google/gemini-3.1-flash-lite-preview',
                 temperature: 0.1,
                 maxTokens: 512,
                 tools: CODEX_FULL_TOOLS,
@@ -320,7 +320,7 @@ export async function syncCodexFromLore(loreEntry: string): Promise<void> {
                 { role: 'user', content: `RECENT LORE ENTRY:\n\n"${loreEntry}"\n\nExtract and register any notable new entities using your tools.` }
             ],
             {
-                model: 'google/gemini-2.5-flash',
+                model: 'google/gemini-3.1-flash-lite-preview',
                 temperature: 0.1, // Low temperature for factual extraction
                 maxTokens: 500,
                 tools: CODEX_FULL_TOOLS,

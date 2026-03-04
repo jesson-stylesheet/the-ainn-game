@@ -9,6 +9,7 @@
 import { eventBus } from '../../core/engine/eventBus';
 import * as db from './queries';
 import { gameState } from '../../core/engine/gameState';
+import { generateUUID } from '../../core/engine/utils';
 import async from 'async';
 
 class DBSyncAdapter {
@@ -103,6 +104,23 @@ class DBSyncAdapter {
             if (!isDBEnabled()) return;
             this.dbQueue.push(async () => {
                 await db.insertPatron(patron);
+            });
+            // Pre-register every patron in the World Codex so the lore system can find them
+            // by their canonical name, preventing epithet variants ("Old Man Aldric") from
+            // being mistakenly registered as new characters.
+            this.dbQueue.push(async () => {
+                try {
+                    await db.insertCodexCharacter({
+                        id: generateUUID(),
+                        name: patron.name,
+                        description: `A ${patron.archetype} who frequents The AInn. An adventurer available to take on quests and contribute to the saga of the realm.`,
+                        characterType: 'patron',
+                        patronId: patron.id,
+                    });
+                } catch (e) {
+                    // Non-fatal — codex registration is best-effort
+                    console.warn(`[DBSync] Failed to pre-register patron "${patron.name}" in codex:`, e);
+                }
             });
         });
 
@@ -214,6 +232,30 @@ class DBSyncAdapter {
                     console.log(`[DBSync] Lore entry saved for quest: ${data.questId}`);
                 } catch (e) {
                     console.error(`[DBSync] narrative:completed failed in queue:`, e);
+                }
+            });
+        });
+
+        // ── Lore Guardian Synthesis
+        eventBus.on('lore:synthesis_finalized', ({ synthesisText, questionsAndAnswersText }) => {
+            if (!isDBEnabled()) return;
+            this.dbQueue.push(async () => {
+                try {
+                    // 1. Wipe ALL lore entries for this world — every inn in the world is cleared.
+                    await db.deleteAllLoreEntriesByWorld();
+                    // 2. Insert the synthesis as the single canonical seed entry.
+                    await db.insertLoreEntry({
+                        questId: null,
+                        originalText: questionsAndAnswersText,
+                        outcome: 'SYNTHESIS',
+                        patronName: 'The Chronicle Guardian',
+                        patronArchetype: 'Celestial Observer',
+                        loreText: synthesisText,
+                        storyText: 'The Guardian weaves the threads of fate.',
+                    });
+                    console.log('[DBSync] World lore replaced with Guardian synthesis.');
+                } catch (e) {
+                    console.error('[DBSync] lore:synthesis_finalized failed in queue:', e);
                 }
             });
         });

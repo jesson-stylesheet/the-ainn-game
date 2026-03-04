@@ -145,6 +145,14 @@ export const CODEX_HANDLERS: ToolHandlerRegistry = {
         return results.length > 0 ? results : { status: 'NOT_FOUND', message: `No mob matching '${args.query}' exists in the codex.` };
     },
     register_mob: async (args: any) => {
+        // Semantic pre-check at 0.75 — catches plurals, synonyms, and rephrased names that
+        // slipped past the LLM's own search step (e.g. "Wasps" when "Wasp" is already registered).
+        const semQuery = `${args.name} ${args.description ?? ''} habitat:${args.habitat ?? ''}`;
+        const similar = await db.searchCodexMobSemantic(semQuery, 0.75, 1);
+        if (similar.length > 0) {
+            console.log(`[Codex] register_mob blocked — "${args.name}" is semantically similar to existing entry "${similar[0].name}"`);
+            return { status: 'ALREADY_EXISTS', message: `A similar mob already exists in the codex.`, existing: similar[0] };
+        }
         return await db.insertCodexMob(args);
     },
     search_item: async (args: { query: string }) => {
@@ -152,6 +160,12 @@ export const CODEX_HANDLERS: ToolHandlerRegistry = {
         return results.length > 0 ? results : { status: 'NOT_FOUND', message: `No item matching '${args.query}' exists in the codex.` };
     },
     register_item: async (args: any) => {
+        const semQuery = `${args.name} ${args.description ?? ''} category:${args.category ?? ''}`;
+        const similar = await db.searchCodexItemSemantic(semQuery, 0.75, 1);
+        if (similar.length > 0) {
+            console.log(`[Codex] register_item blocked — "${args.name}" is semantically similar to existing entry "${similar[0].name}"`);
+            return { status: 'ALREADY_EXISTS', message: `A similar item already exists in the codex.`, existing: similar[0] };
+        }
         return await db.insertCodexItem(args);
     },
     search_character: async (args: { query: string }) => {
@@ -159,6 +173,12 @@ export const CODEX_HANDLERS: ToolHandlerRegistry = {
         return results.length > 0 ? results : { status: 'NOT_FOUND', message: `No character matching '${args.query}' exists in the codex.` };
     },
     register_character: async (args: any) => {
+        const semQuery = `${args.name} ${args.description ?? ''}`;
+        const similar = await db.searchCodexCharacterSemantic(semQuery, 0.75, 1);
+        if (similar.length > 0) {
+            console.log(`[Codex] register_character blocked — "${args.name}" is semantically similar to existing entry "${similar[0].name}"`);
+            return { status: 'ALREADY_EXISTS', message: `A similar character already exists in the codex.`, existing: similar[0] };
+        }
         return await db.insertCodexCharacter(args);
     },
     search_faction: async (args: { query: string }) => {
@@ -166,6 +186,12 @@ export const CODEX_HANDLERS: ToolHandlerRegistry = {
         return results.length > 0 ? results : { status: 'NOT_FOUND', message: `No faction matching '${args.query}' exists in the codex.` };
     },
     register_faction: async (args: any) => {
+        const semQuery = `${args.name} ${args.description ?? ''} alignment:${args.alignment ?? ''}`;
+        const similar = await db.searchCodexFactionSemantic(semQuery, 0.75, 1);
+        if (similar.length > 0) {
+            console.log(`[Codex] register_faction blocked — "${args.name}" is semantically similar to existing entry "${similar[0].name}"`);
+            return { status: 'ALREADY_EXISTS', message: `A similar faction already exists in the codex.`, existing: similar[0] };
+        }
         return await db.insertCodexFaction(args);
     }
 };

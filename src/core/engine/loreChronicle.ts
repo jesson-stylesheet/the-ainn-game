@@ -51,6 +51,8 @@ class LoreChronicle {
 
     /**
      * Record a Guardian's synthesis entry.
+     * @deprecated Use replaceWithSynthesis() instead — it clears all prior entries
+     * so the synthesis is the sole canonical seed for the next Guardian cycle.
      */
     recordSynthesis(synthesisText: string, questionsAndAnswersText: string = ''): void {
         this.entries.push({
@@ -66,8 +68,28 @@ class LoreChronicle {
         // Note: We don't increment the unacknowledged count here, as a synthesis doesn't trigger another synthesis.
     }
 
-    /** 
-     * How many normal lore entries have been added since the last Guardian visit? 
+    /**
+     * Replace the entire chronicle with a single synthesis entry.
+     * Called after the Guardian finalizes their visit: all prior entries
+     * (regular lore AND any previous syntheses) are discarded so that only
+     * the new synthesis survives as the seed for the next Guardian cycle.
+     */
+    replaceWithSynthesis(synthesisText: string, questionsAndAnswersText: string = ''): void {
+        this.entries = [{
+            timestamp: Date.now(),
+            questId: null,
+            originalText: questionsAndAnswersText,
+            outcome: 'SYNTHESIS',
+            patronName: 'The Chronicle Guardian',
+            patronArchetype: 'Celestial Observer',
+            loreText: synthesisText,
+            storyText: 'The Guardian weaves the threads of fate.',
+        }];
+        this.unacknowledgedCount = 0;
+    }
+
+    /**
+     * How many normal lore entries have been added since the last Guardian visit?
      */
     get unacknowledgedEntriesCount(): number {
         return this.unacknowledgedCount;
@@ -77,6 +99,7 @@ class LoreChronicle {
      * Remove the synthesized entries and reset the counter after a Guardian visit.
      * At call-time the array is: [...older, ...N unacknowledged, SYNTHESIS].
      * We splice out the N unacknowledged entries, keeping older + SYNTHESIS.
+     * @deprecated Prefer replaceWithSynthesis() for the full post-Guardian reset.
      */
     acknowledgeEntries(): void {
         if (this.unacknowledgedCount > 0) {

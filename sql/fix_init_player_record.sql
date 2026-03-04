@@ -1,0 +1,11 @@
+-- ═══════════════════════════════════════════════════════════════════════
+-- THE AINN ENGINE — Fix: Player ID Alignment (RESOLVED IN CODE)
+-- ═══════════════════════════════════════════════════════════════════════
+-- BUG #1 was resolved by correcting the hardcoded playerId in
+-- src/presentation/tui/gameUI.ts to match the existing DB record:
+--
+--   BEFORE: '8307544f-4b84-426a-a9c7-ae51438ee777'  ← no DB record, caused FK violation
+--   AFTER:  '00000000-0000-0000-0000-000000000001'  ← inserted by add_multi_tenancy.sql
+--
+-- No DB migration is required. This file is kept as a record of the fix.
+-- ═══════════════════════════════════════════════════════════════════════

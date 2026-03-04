@@ -8,7 +8,12 @@
 				"--access-token",
 				"sbp_950954fb3aab07535a9e27d8ff397d278d62f533"
 			],
-			"env": {}
+			"env": {},
+			"alwaysAllow": [
+				"list_projects",
+				"execute_sql",
+				"apply_migration"
+			]
 		},
 		"svelte": {
 			"url": "https://mcp.svelte.dev/mcp",

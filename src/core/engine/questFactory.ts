@@ -370,7 +370,11 @@ export function parseQuestText(text: string, innReputation: number = 0): IQuest 
         assignedPatronId: null,
         postedByPatronId: null,
         status: 'POSTED',
-        deadlineTimestamp: now + (DEFAULT_QUEST_DEADLINE_HOURS * TICK_MULTIPLIER * 1000),
+        // TODO: Deadline math bug — TICK_MULTIPLIER was applied twice, causing
+        // quests to expire in ~24 real seconds instead of ~12 real minutes.
+        // Expiry is disabled (MAX_SAFE_INTEGER) until the mechanic is revisited.
+        // Correct formula when re-enabling: now + (DEFAULT_QUEST_DEADLINE_HOURS * 3600 * 1000)
+        deadlineTimestamp: Number.MAX_SAFE_INTEGER,
     };
 }
 

@@ -772,8 +772,9 @@ async function loginFlow(rl: readline.Interface): Promise<void> {
     console.log(`  ║      An Innkeeper's Management Simulation     ║`);
     console.log(`  ╚════════════════════════════════════════════════╝${C.reset}\n`);
 
-    // 1. Auto-login as the specific user
-    const playerId = '8307544f-4b84-426a-a9c7-ae51438ee777';
+    // 1. Auto-login as the default test player.
+    // This UUID matches the player row inserted by add_multi_tenancy.sql.
+    const playerId = '00000000-0000-0000-0000-000000000001';
     console.log(`  ${C.dim}Logging in as Player: ${playerId}...${C.reset}\n`);
 
     // 2. World Selection
@@ -858,14 +859,14 @@ export async function startTUI(): Promise<void> {
             console.error(`\n  ${C.red}Failed to initialize game state from DB: ${(e as Error).message}${C.reset}`);
             console.log(`  ${C.yellow}Falling back to mock identifiers...${C.reset}\n`);
             gameState.setIdentifiers(
-                '8307544f-4b84-426a-a9c7-ae51438ee777',
+                '00000000-0000-0000-0000-000000000001',
                 '00000000-0000-0000-0000-000000000002',
                 '00000000-0000-0000-0000-000000000003'
             );
         }
     } else {
         gameState.setIdentifiers(
-            '8307544f-4b84-426a-a9c7-ae51438ee777',
+            '00000000-0000-0000-0000-000000000001',
             '00000000-0000-0000-0000-000000000002',
             '00000000-0000-0000-0000-000000000003'
         );

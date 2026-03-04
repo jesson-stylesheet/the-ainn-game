@@ -62,6 +62,7 @@ interface QuestRow {
 
 interface LoreRow {
     id: string;
+    world_id: string;
     quest_id: string | null;
     patron_id: string | null;
     original_text: string;
@@ -103,13 +104,12 @@ interface ResolutionRow {
 }
 
 interface InnStateRow {
-    id: number;
+    id: string;
     current_tick: number;
     gold: number;
     copper: number;
     reputation: number;
     created_at: string;
-    updated_at: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -505,6 +505,7 @@ export async function insertLoreEntry(entry: {
 }): Promise<void> {
     const { error } = await supabase.from('lore_chronicle').insert({
         quest_id: entry.questId,
+        world_id: gameState.worldId,
         inn_id: gameState.innId,
         patron_id: entry.patronId ?? null,
         original_text: entry.originalText,
@@ -516,6 +517,19 @@ export async function insertLoreEntry(entry: {
         narrative_seed: entry.narrativeSeed ?? null,
     });
     if (error) throw new Error(`Failed to insert lore: ${error.message}`);
+}
+
+/**
+ * Delete ALL lore entries for the current world.
+ * Called by the DBSyncAdapter after a Guardian synthesis so the synthesis
+ * becomes the sole canonical entry that seeds the next Guardian cycle.
+ */
+export async function deleteAllLoreEntriesByWorld(): Promise<void> {
+    const { error } = await supabase
+        .from('lore_chronicle')
+        .delete()
+        .eq('world_id', gameState.worldId);
+    if (error) throw new Error(`Failed to delete world lore entries: ${error.message}`);
 }
 
 export async function updateLoreOutcome(
@@ -570,8 +584,31 @@ export async function logEvent(
 // ═══════════════════════════════════════════════════════════════════════
 
 /**
- * Normalizes entity names to prevent duplicates from typos/casing.
- * e.g., " crimson   DEATHstalker " -> "Crimson Deathstalker"
+ * Reduces common English plural forms to their singular root, word by word.
+ * Conservative: only handles the most reliable patterns to avoid mangling
+ * uncommon fantasy nouns. Applied inside sanitizeName() so both insert
+ * and lookup always operate on the same canonical singular form.
+ *
+ * Examples: Wasps→Wasp  Wolves→Wolf  Elves→Elf  Witches→Witch  Foxes→Fox
+ */
+function singularizeWord(word: string): string {
+    if (word.length < 4) return word;
+    const lower = word.toLowerCase();
+    // ves → f  (Wolves→Wolf, Elves→Elf)
+    if (lower.endsWith('ves') && word.length >= 5) return word.slice(0, -3) + 'f';
+    // es with sibilant/affricate stem  (Witches→Witch, Foxes→Fox, Bushes→Bush, Classes→Class)
+    if (lower.endsWith('es') && word.length >= 5) {
+        const stem = word.slice(0, -2);
+        if (/(?:sh|ch|x|ss)$/i.test(stem)) return stem;
+    }
+    // Generic trailing-s  (Wasps→Wasp, Spiders→Spider, Goblins→Goblin)
+    if (lower.endsWith('s') && !lower.endsWith('ss') && word.length >= 4) return word.slice(0, -1);
+    return word;
+}
+
+/**
+ * Normalizes entity names to prevent duplicates from typos, casing, and plurals.
+ * e.g., " crimson   DEATHstalkers " -> "Crimson Deathstalker"
  */
 function sanitizeName(name: string): string {
     if (!name) return name;
@@ -579,7 +616,7 @@ function sanitizeName(name: string): string {
         .trim()
         .replace(/\s+/g, ' ')
         .split(' ')
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .map(w => singularizeWord(w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
         .join(' ');
 }
 
@@ -665,8 +702,21 @@ export async function searchCodexItemSemantic(query: string, matchThreshold: num
 export async function insertCodexCharacter(character: ICodexCharacter): Promise<ICodexCharacter> {
     const cleanName = sanitizeName(character.name);
 
+    // Fast path: exact/partial name match
     const existing = await searchCodexCharacterByName(cleanName);
     if (existing) return existing;
+
+    // Semantic guard: if this entry has NO patronId it came from lore-sync (not a real patron
+    // arriving at the inn). Check at 0.75 similarity to catch epithet variants of already-registered
+    // patrons/NPCs (e.g. "The Old Man" matching canonical "Aldric Blackthorn" who is a patron).
+    if (!character.patronId) {
+        const semQuery = `${cleanName} ${character.description}`;
+        const semanticMatches = await searchCodexCharacterSemantic(semQuery, 0.75, 1);
+        if (semanticMatches.length > 0) {
+            console.log(`[Codex] Skipping duplicate character "${cleanName}" — semantically matches existing entry "${semanticMatches[0].name}"`);
+            return semanticMatches[0];
+        }
+    }
 
     const embedText = `${cleanName}: ${character.description} (Type: ${character.characterType})`;
     const embedding = await generateEmbedding(embedText, 'google/gemini-embedding-001', 1536);

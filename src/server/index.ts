@@ -90,11 +90,11 @@ app.post('/api/quests/assign', (req, res) => {
         return res.status(400).json({ error: 'patronId and questId required' });
     }
 
-    const success = gameState.assignPatronToQuest(patronId, questId);
-    if (success) {
+    const result = gameState.assignPatronToQuest(patronId, questId);
+    if (result.ok) {
         res.json({ success: true, message: 'Patron assigned to quest' });
     } else {
-        res.status(400).json({ success: false, error: 'Failed to assign patron. Check states and material requirements.' });
+        res.status(400).json({ success: false, error: result.error ?? 'Failed to assign patron. Check states and material requirements.' });
     }
 });
 

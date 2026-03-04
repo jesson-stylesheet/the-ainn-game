@@ -11,7 +11,8 @@
 import { loreChronicle } from './loreChronicle';
 import { eventBus } from './eventBus';
 
-export const GUARDIAN_THRESHOLD = 25;
+
+export const GUARDIAN_THRESHOLD = 12;
 
 class LoreGuardian {
     /**
@@ -39,12 +40,18 @@ class LoreGuardian {
 
     /**
      * Once the synthesis is complete, this method is called to finalize the Guardian's visit.
+     * Replaces ALL in-memory lore entries with just the synthesis (the new canonical seed),
+     * then emits `lore:synthesis_finalized` so the DB layer can mirror the same replacement.
      */
     finalizeVisit(synthesisEntry: string, questionsAndAnswersText: string): void {
-        // Record the synthesis in the chronicle
-        loreChronicle.recordSynthesis(synthesisEntry, questionsAndAnswersText);
-        // Reset the counter
-        loreChronicle.acknowledgeEntries();
+        // Replace every prior entry with the single synthesis — both regular lore and old syntheses.
+        loreChronicle.replaceWithSynthesis(synthesisEntry, questionsAndAnswersText);
+
+        // Signal the DB sync layer to wipe world lore and persist only this synthesis.
+        eventBus.emit('lore:synthesis_finalized', {
+            synthesisText: synthesisEntry,
+            questionsAndAnswersText,
+        });
     }
 }
 
