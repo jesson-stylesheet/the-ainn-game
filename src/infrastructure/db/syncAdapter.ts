@@ -9,6 +9,7 @@
 import { eventBus } from '../../core/engine/eventBus';
 import * as db from './queries';
 import { gameState } from '../../core/engine/gameState';
+import { loreChronicle } from '../../core/engine/loreChronicle';
 import { generateUUID } from '../../core/engine/utils';
 import async from 'async';
 
@@ -67,10 +68,8 @@ class DBSyncAdapter {
                     loreText: row.lore_text,
                     storyText: row.story_text,
                 }));
-                import('../../core/engine/loreChronicle').then(({ loreChronicle }) => {
-                    loreChronicle.hydrate(loreEntries);
-                });
-                console.log(`[DBSync] Lore hydrated: ${loreEntries.length} entries.`);
+                loreChronicle.hydrate(loreEntries);
+                console.log(`[DBSync] Lore hydrated: ${loreEntries.length} entries. Unacknowledged: ${loreChronicle.unacknowledgedEntriesCount}`);
             } catch (e) {
                 console.warn(`[DBSync] Failed to hydrate lore: ${e}`);
             }

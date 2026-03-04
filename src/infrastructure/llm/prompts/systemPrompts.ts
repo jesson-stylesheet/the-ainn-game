@@ -34,7 +34,10 @@ Based on the quest outcome and probability:
 - INJURED: Failure with moderate-low probability (15-40%). They took real damage.
 - DEAD: ONLY for catastrophic failures where P(Success) was below 5% AND d20 was very low (1-3). Death should be RARE and dramatic. If in doubt, choose INJURED.
 
-IMPORTANT: Death should occur less than 5% of the time. Most failures result in INJURED. Success always results in HEALTHY.`;
+IMPORTANT: Death should occur less than 5% of the time. Most failures result in INJURED. Success always results in HEALTHY.
+
+## TOOL BUDGET
+You have access to World Codex tools but a strict budget of 8 tool calls maximum. Search each entity only once. Do not repeat a search you have already made.`;
 
 // ── Quest Parser / Game Master ──────────────────────────────────────────
 
@@ -102,7 +105,7 @@ Estimate how long the quest takes in game ticks.
 
 export const ARRIVAL_SYSTEM_PROMPT = `You write short character introductions for "The AInn", a fantasy inn simulation.
 
-A new character just walked through the inn door. Using their character card (name, archetype, top skills), write a SHORT paragraph (3-5 sentences, max 80 words) as if from a fantasy novel, showing the character introducing themselves to the innkeeper.
+A new character just walked through the inn door. Using their character card (name, archetype, top skills), write a SHORT paragraph (2-4 sentences, max 60 words) as if from a fantasy novel, showing the character introducing themselves to the innkeeper.
 
 RULES:
 - The character speaks and acts AUTHENTICALLY to their archetype and personality
@@ -184,7 +187,10 @@ If the recent lore mentions a specific name or entity you aren't familiar with, 
 
 ## OUTPUT
 1. A brief greeting and observation (dialogue).
-2. Exactly 3 questions.`;
+2. Exactly 3 questions.
+
+## TOOL BUDGET
+You have a strict budget of 8 tool calls maximum. Search each entity name only once — do not re-search the same name or concept. Once you have the results, formulate your questions.`;
 
 export const GUARDIAN_SYNTHESIS_PROMPT = `You are the Chronicle Guardian of "The AInn", forging the grand history of the realm.
 
@@ -197,7 +203,10 @@ It should feel like a major chapter concluding or a new massive conflict being r
 
 ## FORMAT
 - 1-2 paragraphs of majestic, historical prose.
-    - Focus on the *implications* of what the Innkeeper revealed.`;
+    - Focus on the *implications* of what the Innkeeper revealed.
+
+## TOOL BUDGET
+You have a strict budget of 8 tool calls maximum. Search each entity only once. Call register immediately if search returns NOT_FOUND. Do not repeat searches.`;
 
 // ── World Codex Synchroniser ──────────────────────────────────────────────
 
@@ -220,4 +229,7 @@ Your job: read recent lore entries and extract any NOTABLE NEW entities into the
   - Example: lore says "a pack of wasps" — search_mob("wasp") may return "Wasp". Use that. Do not register "Wasps".
 - Patrons of The AInn are pre-registered as characters with type "patron". If the lore describes someone who sounds like a regular inn patron, search first.
 - You can call multiple search/register pairs in one turn if multiple entities are mentioned.
-- If NO specific, notable entities are mentioned in the lore, simply reply with "No new entities found".`;
+- If NO specific, notable entities are mentioned in the lore, simply reply with "No new entities found".
+
+## TOOL BUDGET
+You have a strict budget of 8 tool calls maximum. For each entity: search once, then register if NOT_FOUND. Never repeat a search query you have already executed. Be efficient — batch your searches where possible.`;

@@ -99,6 +99,8 @@ export interface LLMOptions {
     tools?: ToolDefinition[];
     tool_choice?: 'auto' | 'any' | 'none' | { type: 'function', function: { name: string } };
     toolHandlers?: ToolHandlerRegistry;
+    /** Maximum number of tool-call rounds before forcing a final text response. Default: 8. */
+    maxToolRounds?: number;
 }
 
 // ── Core API Call (free-form text) ───────────────────────────────────────
@@ -121,19 +123,29 @@ export async function chatCompletion(
         timeoutMs = 60000,
         tools,
         tool_choice,
-        toolHandlers
+        toolHandlers,
+        maxToolRounds = 8
     } = options;
 
     const messages = [...inputMessages];
+    let toolRound = 0;
+    const seenToolCalls = new Set<string>();
 
     while (true) {
+        // If we've exhausted the tool budget, force the LLM to produce a text answer
+        const budgetExhausted = toolRound >= maxToolRounds;
+
         const body: any = {
             model, messages, temperature, max_tokens: maxTokens,
             provider: { order: ["Google"] }
         };
         if (tools && tools.length > 0) {
             body.tools = tools;
-            if (tool_choice) body.tool_choice = tool_choice;
+            if (budgetExhausted) {
+                body.tool_choice = 'none';
+            } else if (tool_choice) {
+                body.tool_choice = tool_choice;
+            }
         }
 
         const response = await fetch(OPENROUTER_BASE_URL, {
@@ -162,23 +174,33 @@ export async function chatCompletion(
         const finishReason = data.choices[0].finish_reason;
 
         if (finishReason === 'tool_calls' && message.tool_calls && toolHandlers) {
+            toolRound++;
             messages.push(message as ChatMessage);
             for (const call of message.tool_calls) {
                 if (call.type === 'function') {
                     let result;
-                    const handler = toolHandlers[call.function.name];
-                    if (handler) {
-                        try {
-                            const args = JSON.parse(call.function.arguments);
-                            console.log(`\n  🧩 [LLM Tool Call] ${call.function.name}`, args);
-                            result = await handler(args);
-                            console.log(`  ✅ [LLM Tool Result]`, result);
-                        } catch (e: any) {
-                            console.error(`  ❌ [LLM Tool Error] ${call.function.name}:`, e.message);
-                            result = { error: e.message };
-                        }
+                    const callFingerprint = `${call.function.name}:${call.function.arguments}`;
+
+                    // Duplicate call guard — skip the handler entirely
+                    if (seenToolCalls.has(callFingerprint)) {
+                        console.warn(`  ⚠ [LLM Tool Dedup] Skipping duplicate: ${call.function.name}`, call.function.arguments);
+                        result = { error: 'DUPLICATE_CALL — identical call already executed this session. Use the previous result instead of repeating.' };
                     } else {
-                        result = { error: `Tool ${call.function.name} not found` };
+                        seenToolCalls.add(callFingerprint);
+                        const handler = toolHandlers[call.function.name];
+                        if (handler) {
+                            try {
+                                const args = JSON.parse(call.function.arguments);
+                                console.log(`\n  🧩 [LLM Tool Call] ${call.function.name} [${toolRound}/${maxToolRounds}]`, args);
+                                result = await handler(args);
+                                console.log(`  ✅ [LLM Tool Result]`, result);
+                            } catch (e: any) {
+                                console.error(`  ❌ [LLM Tool Error] ${call.function.name}:`, e.message);
+                                result = { error: e.message };
+                            }
+                        } else {
+                            result = { error: `Tool ${call.function.name} not found` };
+                        }
                     }
                     messages.push({
                         role: 'tool',
@@ -216,12 +238,18 @@ export async function chatCompletionStructured<T>(
         timeoutMs = 60000,
         tools,
         tool_choice,
-        toolHandlers
+        toolHandlers,
+        maxToolRounds = 8
     } = options;
 
     const messages = [...inputMessages];
+    let toolRound = 0;
+    const seenToolCalls = new Set<string>();
 
     while (true) {
+        // If we've exhausted the tool budget, force the LLM to produce a text answer
+        const budgetExhausted = toolRound >= maxToolRounds;
+
         const body: any = {
             model, messages, temperature, max_tokens: maxTokens,
             response_format: { type: 'json_schema', json_schema: jsonSchema },
@@ -229,7 +257,11 @@ export async function chatCompletionStructured<T>(
         };
         if (tools && tools.length > 0) {
             body.tools = tools;
-            if (tool_choice) body.tool_choice = tool_choice;
+            if (budgetExhausted) {
+                body.tool_choice = 'none';
+            } else if (tool_choice) {
+                body.tool_choice = tool_choice;
+            }
         }
 
         const response = await fetch(OPENROUTER_BASE_URL, {
@@ -258,23 +290,33 @@ export async function chatCompletionStructured<T>(
         const finishReason = data.choices[0].finish_reason;
 
         if (finishReason === 'tool_calls' && message.tool_calls && toolHandlers) {
+            toolRound++;
             messages.push(message as ChatMessage);
             for (const call of message.tool_calls) {
                 if (call.type === 'function') {
                     let result;
-                    const handler = toolHandlers[call.function.name];
-                    if (handler) {
-                        try {
-                            const args = JSON.parse(call.function.arguments);
-                            console.log(`\n  🧩 [LLM Tool Call] ${call.function.name}`, args);
-                            result = await handler(args);
-                            console.log(`  ✅ [LLM Tool Result]`, result);
-                        } catch (e: any) {
-                            console.error(`  ❌ [LLM Tool Error] ${call.function.name}:`, e.message);
-                            result = { error: e.message };
-                        }
+                    const callFingerprint = `${call.function.name}:${call.function.arguments}`;
+
+                    // Duplicate call guard — skip the handler entirely
+                    if (seenToolCalls.has(callFingerprint)) {
+                        console.warn(`  ⚠ [LLM Tool Dedup] Skipping duplicate: ${call.function.name}`, call.function.arguments);
+                        result = { error: 'DUPLICATE_CALL — identical call already executed this session. Use the previous result instead of repeating.' };
                     } else {
-                        result = { error: `Tool ${call.function.name} not found` };
+                        seenToolCalls.add(callFingerprint);
+                        const handler = toolHandlers[call.function.name];
+                        if (handler) {
+                            try {
+                                const args = JSON.parse(call.function.arguments);
+                                console.log(`\n  🧩 [LLM Tool Call] ${call.function.name} [${toolRound}/${maxToolRounds}]`, args);
+                                result = await handler(args);
+                                console.log(`  ✅ [LLM Tool Result]`, result);
+                            } catch (e: any) {
+                                console.error(`  ❌ [LLM Tool Error] ${call.function.name}:`, e.message);
+                                result = { error: e.message };
+                            }
+                        } else {
+                            result = { error: `Tool ${call.function.name} not found` };
+                        }
                     }
                     messages.push({
                         role: 'tool',

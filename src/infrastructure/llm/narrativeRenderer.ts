@@ -61,7 +61,8 @@ MATH:
                 maxTokens: 600,
                 tools: CODEX_FULL_TOOLS,
                 toolHandlers: CODEX_HANDLERS,
-                tool_choice: 'auto'
+                tool_choice: 'auto',
+                maxToolRounds: 8
             }
         );
     } catch (error) {
@@ -90,7 +91,8 @@ export async function parseQuestStructured(text: string, inventoryContext: strin
             maxTokens: 512,
             tools: CODEX_SEARCH_TOOLS,
             toolHandlers: CODEX_HANDLERS,
-            tool_choice: 'auto'
+            tool_choice: 'auto',
+            maxToolRounds: 8
         }
     );
 }
@@ -255,7 +257,8 @@ export async function generateGuardianQuestions(recentLore: string): Promise<Gua
                 maxTokens: 512,
                 tools: CODEX_FULL_TOOLS,
                 toolHandlers: CODEX_HANDLERS,
-                tool_choice: 'auto'
+                tool_choice: 'auto',
+                maxToolRounds: 8
             } // Slight bump in temp for creativity
         );
     } catch (error) {
@@ -295,7 +298,8 @@ export async function synthesizeLore(recentLore: string, questions: string[], an
                 maxTokens: 512,
                 tools: CODEX_FULL_TOOLS,
                 toolHandlers: CODEX_HANDLERS,
-                tool_choice: 'auto'
+                tool_choice: 'auto',
+                maxToolRounds: 8
             }
         );
     } catch (error) {
@@ -321,11 +325,12 @@ export async function syncCodexFromLore(loreEntry: string): Promise<void> {
             ],
             {
                 model: 'google/gemini-3.1-flash-lite-preview',
-                temperature: 0.1, // Low temperature for factual extraction
-                maxTokens: 500,
+                temperature: 0.1,
+                maxTokens: 300,
                 tools: CODEX_FULL_TOOLS,
                 toolHandlers: CODEX_HANDLERS,
-                tool_choice: 'auto'
+                tool_choice: 'auto',
+                maxToolRounds: 8
             }
         );
     } catch (error) {
