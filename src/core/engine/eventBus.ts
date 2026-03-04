@@ -7,7 +7,7 @@
  */
 
 import { EventEmitter } from 'events';
-import type { IPatron, IQuest, QuestResolutionResult, IItem } from '../types/entity';
+import type { IPatron, IQuest, QuestResolutionResult, IItem, EndOfDaySummary } from '../types/entity';
 
 // ── Event Map ───────────────────────────────────────────────────────────
 
@@ -30,9 +30,8 @@ export interface GameEvents {
         patronHealth: string;
         injuryDescription?: string;
     };
-    'tick': { simulatedTime: number; tickCount: number };
-    'engine:started': { startTime: number };
-    'engine:stopped': { stopTime: number };
+    'day:started': { day: number };
+    'day:ended': EndOfDaySummary;
     'lore:guardian_arrived': { recentLore: string };
     'lore:synthesis_finalized': { synthesisText: string; questionsAndAnswersText: string };
     'inn:reputation_gained': { amount: number, total: number };

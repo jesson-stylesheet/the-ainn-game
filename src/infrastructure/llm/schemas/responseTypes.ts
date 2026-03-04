@@ -25,7 +25,7 @@ export interface QuestParseResult {
     questType: 'diplomacy' | 'itemRetrieval' | 'subjugation' | 'crafting';
     skills: Record<string, number>;
     difficulty: number;
-    resolutionTicks: number;
+    durationDays: number;
     itemDetails: {
         itemName: string;
         category: ItemCategory;

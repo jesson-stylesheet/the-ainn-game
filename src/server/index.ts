@@ -4,13 +4,16 @@
  * ═══════════════════════════════════════════════════════════════════════
  * Express server exposing the core engine via REST API and Server-Sent 
  * Events (SSE). Runs independently of any UI.
+ * 
+ * Legacy Note: Previously, the server started a real-time 'ticker.start()'
+ * loop. Game time is now entirely player-driven via POST /api/day/advance.
  */
 
 import express from 'express';
 import cors from 'cors';
 import { config } from 'dotenv';
 import { eventBus } from '../core/engine/eventBus';
-import { ticker } from '../core/engine/ticker';
+import { dayEngine } from '../core/engine/dayEngine';
 import { gameState } from '../core/engine/gameState';
 import { syncAdapter } from '../infrastructure/db/syncAdapter';
 import { narrativeWorker } from '../core/engine/narrativeWorker';
@@ -28,13 +31,11 @@ app.use(express.json());
 narrativeWorker.init();
 syncAdapter.init();
 
-// START THE ENGINE
+// HYDRATE THE ENGINE (no more ticker.start() — time is player-driven)
 syncAdapter.hydrateGameState().then(() => {
-    ticker.start();
-    console.log('✅ Engine tick started after state hydration.');
+    console.log(`✅ Engine hydrated. Day ${gameState.currentDay}. Waiting for player commands.`);
 }).catch((e) => {
     console.error('Failed to hydrate game state', e);
-    ticker.start(); // Start anyway as fallback
 });
 
 // ── REST API ────────────────────────────────────────────────────────────
@@ -44,7 +45,7 @@ app.get('/api/state', (req, res) => {
     res.json({
         summary: gameState.getSummary(),
         inn: {
-            tick: gameState.currentTick,
+            day: gameState.currentDay,
             gold: gameState.innGold,
             copper: gameState.innCopper,
             reputation: gameState.reputation
@@ -98,6 +99,16 @@ app.post('/api/quests/assign', (req, res) => {
     }
 });
 
+// 4. Advance Day (the core game loop trigger)
+app.post('/api/day/advance', (req, res) => {
+    try {
+        const summary = dayEngine.advanceDay();
+        res.json(summary);
+    } catch (e) {
+        res.status(500).json({ error: (e as Error).message });
+    }
+});
+
 // ── SERVER-SENT EVENTS (SSE) ────────────────────────────────────────────
 // The Svelte Client subscribes here to receive real-time engine events.
 
@@ -123,9 +134,8 @@ app.get('/api/events', (req, res) => {
         'quest:resolved': (data: any) => sendEvent('quest:resolved', data),
         'narrative:completed': (data: any) => sendEvent('narrative:completed', data),
         'item:added': (data: any) => sendEvent('item:added', data),
-        // Filter ticks to 1 per second if TICK_MULTIPLIER is fast, to avoid spam? 
-        // For now, emit them all so client sees the smooth clock.
-        'tick': (data: any) => sendEvent('tick', data),
+        'day:started': (data: any) => sendEvent('day:started', data),
+        'day:ended': (data: any) => sendEvent('day:ended', data),
     };
 
     // Attach listeners

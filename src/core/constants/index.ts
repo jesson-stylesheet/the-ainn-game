@@ -5,12 +5,6 @@
  * All magic numbers live here. Nowhere else. Ever.
  */
 
-/** 1 real second = 120 in-game seconds (2 game minutes) */
-export const TICK_MULTIPLIER = 120;
-
-/** Milliseconds between ticks (1 second) */
-export const TICK_INTERVAL_MS = 1000;
-
 /** The Chaos Coefficient — amplifies the d20 roll's influence on quest outcomes. */
 export const GAMMA = 1.50;
 
@@ -39,8 +33,11 @@ export const MAX_STAT = 20;
 /** RNG variance applied to patron base stats on instantiation. */
 export const STAT_VARIANCE: [number, number] = [-2, 2];
 
-/** Default quest deadline in in-game hours from posting. */
-export const DEFAULT_QUEST_DEADLINE_HOURS = 24;
+/**
+ * How many in-game days a POSTED quest stays on the board before expiring
+ * if no patron accepts it. Innkeeper should check quests every day.
+ */
+export const DEFAULT_QUEST_DEADLINE_DAYS = 3;
 
 /**
  * Economy: Use strict integers for all currency.

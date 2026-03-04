@@ -93,12 +93,12 @@ If questType is NOT "itemRetrieval" OR "crafting", set itemDetails to null. If N
 10-15: trivial | 16-25: standard | 26-35: dangerous | 36-45: legendary | 46-50: impossible
 For itemRetrieval quests, factor rarity into difficulty.
 
-## RESOLUTION TIME IN TICKS (10-100)
-Estimate how long the quest takes in game ticks.
-- 10-20: Trivial, quick errands
-- 21-40: Standard day-jobs
-- 41-70: Multi-day dangerous expeditions
-- 71-100: Epic, impossible journeys (matches difficulty 46-50)`;
+## RESOLUTION TIME IN DAYS (1-10)
+Estimate how long the quest takes in game days.
+- 1-2: Trivial, quick errands
+- 3-4: Standard day-jobs
+- 5-7: Multi-day dangerous expeditions
+- 8-10: Epic, impossible journeys (matches difficulty 46-50)`;
 }
 
 // ── Patron Arrival — Self-Introduction ──────────────────────────────────

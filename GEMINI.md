@@ -5,7 +5,7 @@ This document serves as the ground truth for the AInn Game's architecture, pipel
 ## Core Philosophical Rules
 
 1. **State is Persistent, Not Volatile:** 
-   The memory `gameState` object is just a fast access layer. **Supabase is the ultimate source of truth.** Upon server boot (`src/server/index.ts`), the engine *must* invoke `syncAdapter.hydrateGameState()` to load active quests, patrons, inventory, and tick count before starting the game loop.
+   The memory `gameState` object is just a fast access layer. **Supabase is the ultimate source of truth.** Upon server boot (`src/server/index.ts`), the engine *must* invoke `syncAdapter.hydrateGameState()` to load active quests, patrons, inventory, and current day before starting the game loop.
 2. **Determinism over Hallucination:**
    Stats, probabilities, item drops, and game logic are purely mathematical (`src/core/math/probability.ts`). The LLM is **only** used to narrate the results of these deterministic checks, never to decide if an action succeeds or fails.
 3. **Event-Driven Subsystems:**
@@ -13,12 +13,12 @@ This document serves as the ground truth for the AInn Game's architecture, pipel
 
 ---
 
-## 1. The Ticking Engine (`src/core/engine/ticker.ts`)
+## 1. The Day Cycle Engine (`src/core/engine/dayEngine.ts`)
 
-The game operates on a discrete "tick" system (1 tick = 1 in-game minute, natively ~500ms real-time).
-- **Time Management**: The `gameState.currentTick` advances infinitely.
-- **Expiration Checks**: Within `ticker.ts`, the engine checks if a `POSTED` quest has surpassed its `deadlineTimestamp`. If so, it fails and triggers `quest:expired`.
-- **Worker Queues**: The ticker picks up `ACCEPTED` quests that have reached their `completionTimestamp` and pushes them to the `narrativeWorker`.
+The game operates on a discrete, player-driven "Day Cycle" rather than real-time ticks.
+- **Time Management**: The `gameState.currentDay` advances only when explicitly triggered (e.g., via `POST /api/day/advance`).
+- **Expiration & Resolution**: Within `dayEngine.ts`, the engine decrements quest durations, expires unaccepted quests that pass their `deadlineDays`, and resolves completed quests, pushing the final results to the `narrativeWorker`.
+- **Worker Queues**: The engine picks up `ACCEPTED` quests that have depleted their `durationDays` and hands them off for narrative generation.
 
 ## 2. The Asynchronous Narrative Pipeline (`src/core/engine/narrativeWorker.ts`)
 

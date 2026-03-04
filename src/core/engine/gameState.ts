@@ -32,23 +32,29 @@ class GameState {
     }
 
     // ── Inn Global State ────────────────────────────────────────────────
-    private _currentTick = 0;
+    private _currentDay = 1;
     private _innGold = 100;
     private _innCopper = 0;
     private _reputation = 0;
 
-    get currentTick(): number { return this._currentTick; }
+    /**
+ * The central brain holding the mutable state of the active Inn.
+ * Legacy Note: Previously managed a real-time 'currentTick'. This was
+ * migrated to a player-driven 'currentDay' cycle for better pacing.
+ */
+    get currentDay(): number { return this._currentDay; }
     get innGold(): number { return this._innGold; }
     get innCopper(): number { return this._innCopper; }
     get reputation(): number { return this._reputation; }
 
-    tick(): number {
-        this._currentTick++;
-        return this._currentTick;
+    /** Advance one in-game day. Called by DayEngine.advanceDay(). */
+    incrementDay(): number {
+        this._currentDay++;
+        return this._currentDay;
     }
 
-    setInnState(state: { currentTick?: number; gold?: number; copper?: number; reputation?: number }): void {
-        if (state.currentTick !== undefined) this._currentTick = state.currentTick;
+    setInnState(state: { currentDay?: number; gold?: number; copper?: number; reputation?: number }): void {
+        if (state.currentDay !== undefined) this._currentDay = state.currentDay;
         if (state.gold !== undefined) this._innGold = state.gold;
         if (state.copper !== undefined) this._innCopper = state.copper;
         if (state.reputation !== undefined) this._reputation = state.reputation;
@@ -169,12 +175,13 @@ class GameState {
     }
 
     /**
-     * Expire POSTED quests past their deadline.
+     * Expire POSTED quests past their deadline (day-based).
+     * Called by DayEngine on each End of Day.
      */
-    expireQuests(simulatedTimeMs: number): IQuest[] {
+    expireQuestsByDay(currentDay: number): IQuest[] {
         const expired: IQuest[] = [];
         for (const q of this.quests.values()) {
-            if (q.status === 'POSTED' && simulatedTimeMs >= q.deadlineTimestamp) {
+            if (q.status === 'POSTED' && currentDay >= q.deadlineDays) {
                 q.status = 'EXPIRED';
                 expired.push(q);
                 eventBus.emit('quest:expired', { quest: q });
@@ -186,15 +193,19 @@ class GameState {
     // ── Resolution ──────────────────────────────────────────────────────
 
     /**
-     * Decrement resolutionTicks for all accepted quests.
+     * Decrement durationDays for all accepted quests by 1.
      * Returns the list of quests that have hit 0 and should resolve.
+     * Called by DayEngine on each End of Day.
+     * 
+     * Legacy Note: Previously this decremented resolutionTicks on every tick().
+     * Now it is called once daily by the DayEngine.
      */
-    tickActiveQuests(): IQuest[] {
+    tickActiveQuestsByDay(): IQuest[] {
         const resolving: IQuest[] = [];
         for (const q of this.quests.values()) {
             if (q.status === 'ACCEPTED') {
-                q.resolutionTicks--;
-                if (q.resolutionTicks <= 0) {
+                q.durationDays--;
+                if (q.durationDays <= 0) {
                     resolving.push(q);
                 }
             }
@@ -225,6 +236,7 @@ class GameState {
                     id: generateUUID(),
                     name: quest.itemDetails.itemName,
                     category: quest.itemDetails.category,
+                    // Legacy Note: Was 'resolutionTicks'. Now 'durationDays'.
                     rarity: quest.itemDetails.rarity,
                     quantity: quest.itemDetails.quantity,
                     ownerPatronId: null,
@@ -385,7 +397,7 @@ class GameState {
         this.quests.clear();
         this.resolvedResults = [];
         this.items.clear();
-        this._currentTick = 0;
+        this._currentDay = 1;
         this._innGold = 100;
         this._innCopper = 0;
         this._reputation = 0;

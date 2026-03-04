@@ -4,6 +4,10 @@
  * ═══════════════════════════════════════════════════════════════════════
  * Listens to the EventBus and automatically fires Supabase queries to keep 
  * the database perfectly mirrored with the in-memory GameState.
+ * 
+ * Legacy Note: We used to sync the clock every X ticks. Now, we
+ * save the entire day's progress (gold, day number, rep) ONCE at
+ * the end of every in-game day via the 'day:ended' event.
  */
 
 import { eventBus } from '../../core/engine/eventBus';
@@ -27,6 +31,9 @@ class DBSyncAdapter {
 
             // 1. Inn State
             try {
+                // ==========================================
+                // END-OF-DAY STATE SYNC
+                // ==========================================
                 const innState = await db.fetchInnState();
                 gameState.setInnState(innState);
             } catch (e) {
@@ -259,15 +266,22 @@ class DBSyncAdapter {
             });
         });
 
-        // ── Ticker & Engine
-        eventBus.on('tick', ({ simulatedTime }) => {
+        // ── End of Day Summary → update inn state in DB
+        eventBus.on('day:ended', (summary) => {
             if (!isDBEnabled()) return;
-            // Periodically save the game clock tick (e.g. every 10 ticks to avoid DB spam)
-            if (gameState.currentTick % 10 === 0) {
-                this.dbQueue.push(async () => {
-                    await db.tickGameClock(10);
-                });
-            }
+            this.dbQueue.push(async () => {
+                try {
+                    await db.updateInnState({
+                        currentDay: summary.day,
+                        gold: gameState.innGold,
+                        copper: gameState.innCopper,
+                        reputation: gameState.reputation,
+                    });
+                    console.log(`[DBSync] End of Day ${summary.day} saved. Resolved: ${summary.questsResolved}, Expired: ${summary.questsExpired}`);
+                } catch (e) {
+                    console.error('[DBSync] day:ended failed in queue:', e);
+                }
+            });
         });
 
         console.log('✅ DBSyncAdapter initialized');

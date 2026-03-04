@@ -3,7 +3,7 @@
  * THE AINN ENGINE — Terminal User Interface
  * ═══════════════════════════════════════════════════════════════════════
  * The interactive TUI for testing the core game loop.
- * Player can: post quests, view patrons, assign patrons, run the ticker.
+ * Player can: post quests, view patrons, assign patrons, end the day.
  *
  * This is temporary (Blueprint §9.1) — will be replaced by Svelte5 web.
  * The core engine emits events, the TUI just subscribes and displays.
@@ -16,7 +16,7 @@ import { parseQuestText, analyzeQuestVerbosity } from '../../core/engine/questFa
 import { gameState } from '../../core/engine/gameState';
 import { eventBus } from '../../core/engine/eventBus';
 import { loreChronicle } from '../../core/engine/loreChronicle';
-import { ticker } from '../../core/engine/ticker';
+import { dayEngine } from '../../core/engine/dayEngine';
 import { resolveQuest } from '../../core/math/probability';
 import { syncAdapter } from '../../infrastructure/db/syncAdapter';
 import { narrativeWorker } from '../../core/engine/narrativeWorker';
@@ -68,6 +68,7 @@ function showStatus(): void {
     console.log(`  ${C.gray}├─────────────────────────────────────────┤${C.reset}`);
     console.log(`  ${C.gray}│${C.reset} Patrons: ${C.bright}${s.totalPatrons}${C.reset} (${s.idlePatrons} idle, ${s.onQuestPatrons} questing)  ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}│${C.reset} Quests:  ${s.postedQuests} posted, ${C.green}${s.completedQuests}${C.reset} done, ${C.red}${s.failedQuests}${C.reset} failed  ${C.gray}│${C.reset}`);
+    console.log(`  ${C.gray}│${C.reset} Day:     ${C.bright}${gameState.currentDay}${C.reset}                                ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}│${C.reset} Lore:    ${loreChronicle.size} entries                      ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}│${C.reset} Mode:    ${modes}                     ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}└─────────────────────────────────────────┘${C.reset}`);
@@ -79,7 +80,7 @@ function showMenu(): void {
     console.log(`    ${C.cyan}2${C.reset} View Patrons          ${C.cyan}7${C.reset} View Inn Ledger`);
     console.log(`    ${C.cyan}3${C.reset} View Quest Board      ${C.cyan}8${C.reset} Summon New Patron`);
     console.log(`    ${C.cyan}4${C.reset} Assign Patron         ${C.cyan}9${C.reset} Toggle LLM/DB`);
-    console.log(`    ${C.cyan}5${C.reset} Check/FastForward Quests  ${C.cyan}E${C.reset} Equip Patron`);
+    console.log(`    ${C.cyan}5${C.reset} End the Day               ${C.cyan}E${C.reset} Equip Patron`);
     console.log(`    ${C.cyan}G${C.reset} Summon Lore Guardian (${loreChronicle.unacknowledgedEntriesCount}/${GUARDIAN_THRESHOLD})`);
     console.log(`    ${C.cyan}I${C.reset} Populate Inn (All 9) / ${C.cyan}0${C.reset} Exit`);
     console.log('');
@@ -206,7 +207,7 @@ async function postQuest(rl: readline.Interface): Promise<void> {
     const tagCount = ALL_SKILL_TAGS.filter(t => quest.requirements[t] > 0).length;
     gameState.addQuest(quest);
 
-    console.log(`\n  ${C.green}✓ Quest posted!${C.reset} ${C.cyan}[${quest.type}]${C.reset} D=${quest.difficultyScalar} | T=${quest.resolutionTicks} | ${tagCount} tags`);
+    console.log(`\n  ${C.green}✓ Quest posted!${C.reset} ${C.cyan}[${quest.type}]${C.reset} D=${quest.difficultyScalar} | Days=${quest.durationDays} | ${tagCount} tags`);
     if (quest.itemDetails) {
         const r = quest.itemDetails.rarity;
         const rarityColor = r >= 85 ? C.magenta : r >= 60 ? C.yellow : r >= 30 ? C.cyan : C.green;
@@ -364,7 +365,7 @@ function viewQuests(): void {
             : 'unassigned';
 
         console.log(`  ${C.bright}[${i + 1}]${C.reset} ${statusColor}[${q.status}]${C.reset} ${C.cyan}[${q.type}]${C.reset} "${q.originalText}"`);
-        let detailLine = `      D=${q.difficultyScalar} | T=${q.resolutionTicks} | ${tagCount} tags | ${C.gray}${assignee}${C.reset}`;
+        let detailLine = `      D=${q.difficultyScalar} | Days=${q.durationDays} | ${tagCount} tags | ${C.gray}${assignee}${C.reset}`;
         if (q.itemDetails) {
             const r = q.itemDetails.rarity;
             const rarityColor = r >= 85 ? C.magenta : r >= 60 ? C.yellow : r >= 30 ? C.cyan : C.green;
@@ -456,42 +457,49 @@ async function assignPatron(rl: readline.Interface): Promise<void> {
     }
 }
 
-async function checkQuestProgress(rl: readline.Interface): Promise<void> {
+async function endDay(rl: readline.Interface): Promise<void> {
     const accepted = gameState.getQuestsByStatus('ACCEPTED');
-    if (accepted.length === 0) {
-        console.log(`\n  ${C.dim}No quests currently in progress.${C.reset}`);
-        return;
-    }
+    const posted = gameState.getQuestsByStatus('POSTED');
 
-    console.log(`\n  ${C.bright}⏳ Active Quest Progress${C.reset}\n`);
+    console.log(`\n  ${C.bright}🌙 End of Day ${gameState.currentDay}${C.reset}\n`);
 
-    for (const quest of accepted) {
-        const patron = quest.assignedPatronId ? gameState.getPatron(quest.assignedPatronId) : null;
-        const pName = patron ? patron.name : 'Unknown';
-
-        const maxTicks = 20;
-        const remaining = Math.max(0, quest.resolutionTicks);
-        const progress = Math.max(0, maxTicks - remaining);
-
-        const filled = Math.round((progress / maxTicks) * 20);
-        const empty = Math.max(0, 20 - filled);
-        const bar = `${C.green}${'█'.repeat(filled)}${C.dim}${'░'.repeat(empty)}${C.reset}`;
-
-        console.log(`  ${C.cyan}[${quest.type}]${C.reset} "${quest.originalText.slice(0, 40)}..."`);
-        console.log(`      ${C.magenta}${pName}${C.reset} | Ticks Left: ${C.bright}${remaining}${C.reset}  [${bar}]`);
-    }
-    console.log('');
-
-    const answer = await askQuestion(rl, `  ${C.yellow}Fast-forward all active quests to completion? (y/N): ${C.reset}`);
-    if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
-        let count = 0;
+    if (accepted.length > 0) {
+        console.log(`  ${C.yellow}Active Quests (${accepted.length}):${C.reset}`);
         for (const quest of accepted) {
-            quest.resolutionTicks = 0;
-            count++;
+            const patron = quest.assignedPatronId ? gameState.getPatron(quest.assignedPatronId) : null;
+            const pName = patron ? patron.name : 'Unknown';
+            const daysLeft = quest.durationDays;
+            const bar = daysLeft <= 1 ? `${C.green}★ RESOLVES TONIGHT${C.reset}` : `${C.dim}${daysLeft} day(s) remaining${C.reset}`;
+            console.log(`    ${C.cyan}[${quest.type}]${C.reset} "${quest.originalText.slice(0, 40)}..."`);
+            console.log(`        ${C.magenta}${pName}${C.reset} | ${bar}`);
         }
-        console.log(`\n  ${C.green}▶ Fast-forwarded ${count} quest(s). They will resolve on the next tick.${C.reset}`);
-        // Force an immediate tick to harvest them right now
-        ticker.tick();
+    } else {
+        console.log(`  ${C.dim}No quests currently in progress.${C.reset}`);
+    }
+
+    if (posted.length > 0) {
+        console.log(`\n  ${C.blue}Posted Quests (${posted.length}):${C.reset}`);
+        for (const quest of posted) {
+            const daysUntilExpiry = quest.deadlineDays - gameState.currentDay;
+            const expiryStr = daysUntilExpiry <= 1 ? `${C.red}EXPIRES TONIGHT${C.reset}` : `${C.dim}${daysUntilExpiry} day(s) until expiry${C.reset}`;
+            console.log(`    ${C.cyan}[${quest.type}]${C.reset} "${quest.originalText.slice(0, 40)}..." | ${expiryStr}`);
+        }
+    }
+
+    console.log('');
+    const answer = await askQuestion(rl, `  ${C.yellow}End the day and advance to Day ${gameState.currentDay + 1}? (y/N): ${C.reset}`);
+    if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
+        const summary = dayEngine.advanceDay();
+        console.log(`\n  ${C.green}☀ Day ${summary.day} has dawned.${C.reset}`);
+        if (summary.questsResolved > 0) {
+            console.log(`  ${C.bright}⚔ ${summary.questsResolved} quest(s) resolved!${C.reset} (Check narrative output above)`);
+        }
+        if (summary.questsExpired > 0) {
+            console.log(`  ${C.red}💀 ${summary.questsExpired} quest(s) expired from the board.${C.reset}`);
+        }
+        if (summary.reputationGained > 0) {
+            console.log(`  ${C.yellow}★ +${summary.reputationGained} reputation gained!${C.reset}`);
+        }
     }
 }
 
@@ -687,7 +695,7 @@ async function tryPatronAutoQuest(patron: IPatron, force: boolean = false): Prom
         gameState.addQuest(quest);
 
         const tagCount = ALL_SKILL_TAGS.filter(t => quest.requirements[t] > 0).length;
-        console.log(`  ${C.green}✓ Patron quest posted!${C.reset} ${C.cyan}[${quest.type}]${C.reset} D=${quest.difficultyScalar} | T=${quest.resolutionTicks} | ${tagCount} tags`);
+        console.log(`  ${C.green}✓ Patron quest posted!${C.reset} ${C.cyan}[${quest.type}]${C.reset} D=${quest.difficultyScalar} | Days=${quest.durationDays} | ${tagCount} tags`);
         if (quest.itemDetails) {
             const r = quest.itemDetails.rarity;
             const rarityColor = r >= 85 ? C.magenta : r >= 60 ? C.yellow : r >= 30 ? C.cyan : C.green;
@@ -881,8 +889,8 @@ export async function startTUI(): Promise<void> {
         await syncAdapter.hydrateGameState();
     }
 
-    // Start the game loop automatically
-    ticker.start();
+    // Day-driven engine — no auto-start needed
+    console.log(`☀ Day ${gameState.currentDay}. The inn awaits your command.`);
 
     // Subscribe to events for logging
     eventBus.on('patron:arrived', ({ patron }) => {
@@ -948,7 +956,7 @@ export async function startTUI(): Promise<void> {
             case '2': await viewPatrons(rl); break;
             case '3': viewQuests(); break;
             case '4': await assignPatron(rl); break;
-            case '5': await checkQuestProgress(rl); break;
+            case '5': await endDay(rl); break;
             case '6': viewLore(); break;
             case '7': viewLedger(); break;
             case '8': await summonPatron(rl); break;

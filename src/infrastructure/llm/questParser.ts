@@ -14,11 +14,10 @@ import {
     ALL_SKILL_TAGS,
     createEmptySkillVector,
 } from '../../core/types/entity';
-import { DEFAULT_QUEST_DEADLINE_HOURS, TICK_MULTIPLIER } from '../../core/constants';
+import { DEFAULT_QUEST_DEADLINE_DAYS } from '../../core/constants';
 import { generateUUID } from '../../core/engine/utils';
 import { parseQuestText as mockParseQuestText } from '../../core/engine/questFactory';
 import { gameState } from '../../core/engine/gameState';
-import { ticker } from '../../core/engine/ticker';
 
 // Valid quest types for validation
 const VALID_QUEST_TYPES: QuestType[] = ['diplomacy', 'itemRetrieval', 'subjugation', 'crafting'];
@@ -126,23 +125,17 @@ export async function parseQuestWithLLM(text: string, innReputation: number = 0)
             }));
         }
 
-        const now = ticker.simulatedTime;
-
         return {
             id: generateUUID(),
             originalText: text,
             type: questType,
             requirements: vector,
             difficultyScalar: difficulty,
-            resolutionTicks: Math.max(10, Math.round(response.resolutionTicks ?? 20)),
+            durationDays: Math.max(1, Math.round(response.durationDays ?? Math.round(difficulty / 10))),
             assignedPatronId: null,
             postedByPatronId: null,
             status: 'POSTED',
-            // TODO: Deadline math bug — TICK_MULTIPLIER was applied twice, causing
-            // quests to expire in ~24 real seconds instead of ~12 real minutes.
-            // Expiry is disabled (MAX_SAFE_INTEGER) until the mechanic is revisited.
-            // Correct formula when re-enabling: now + (DEFAULT_QUEST_DEADLINE_HOURS * 3600 * 1000)
-            deadlineTimestamp: Number.MAX_SAFE_INTEGER,
+            deadlineDays: gameState.currentDay + DEFAULT_QUEST_DEADLINE_DAYS,
             ...(itemDetails ? { itemDetails } : {}),
             ...(consumedItems ? { consumedItems } : {}),
         };

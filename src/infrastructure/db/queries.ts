@@ -5,6 +5,11 @@
  * All Supabase CRUD operations for patrons, quests, items, lore,
  * resolutions, events, and inn state.
  * The core engine calls these instead of touching the DB directly.
+ * 
+ * Legacy Note: The database schema was migrated from a tick-based clock
+ * to a day-based day cycle. Obsolete columns like current_tick, resolution_ticks,
+ * and deadline_timestamp were renamed/converted to current_day, duration_days,
+ * and deadline_days.
  */
 
 import { supabase } from './supabaseClient';
@@ -43,11 +48,11 @@ interface QuestRow {
     quest_type: string;
     requirements: SkillVector;
     difficulty_scalar: number;
-    resolution_ticks: number;
+    duration_days: number;
     assigned_patron_id: string | null;
     posted_by_patron_id: string | null;
     status: string;
-    deadline_timestamp: number;
+    deadline_days: number;
     verbosity_score: number;
     tag_count: number;
     resolution_data: QuestResolutionResult | null;
@@ -105,7 +110,7 @@ interface ResolutionRow {
 
 interface InnStateRow {
     id: string;
-    current_tick: number;
+    current_day: number;
     gold: number;
     copper: number;
     reputation: number;
@@ -154,7 +159,7 @@ export async function createInn(worldId: string, playerId: string, name: string)
 // ═══════════════════════════════════════════════════════════════════════
 
 export interface InnState {
-    currentTick: number;
+    currentDay: number;
     gold: number;
     copper: number;
     reputation: number;
@@ -164,24 +169,18 @@ export async function fetchInnState(): Promise<InnState> {
     const { data, error } = await supabase.from('inns').select('*').eq('id', gameState.innId).single();
     if (error) throw new Error(`Failed to fetch inn state: ${error.message}`);
     const row = data as InnStateRow;
-    return { currentTick: row.current_tick, gold: row.gold, copper: row.copper, reputation: row.reputation };
+    return { currentDay: row.current_day, gold: row.gold, copper: row.copper, reputation: row.reputation };
 }
 
 export async function updateInnState(updates: Partial<InnState>): Promise<void> {
     const dbUpdates: Record<string, unknown> = {};
-    if (updates.currentTick !== undefined) dbUpdates.current_tick = updates.currentTick;
+    if (updates.currentDay !== undefined) dbUpdates.current_day = updates.currentDay;
     if (updates.gold !== undefined) dbUpdates.gold = updates.gold;
     if (updates.copper !== undefined) dbUpdates.copper = updates.copper;
     if (updates.reputation !== undefined) dbUpdates.reputation = updates.reputation;
 
     const { error } = await supabase.from('inns').update(dbUpdates).eq('id', gameState.innId);
     if (error) throw new Error(`Failed to update inn state: ${error.message}`);
-}
-
-export async function tickGameClock(ticksToAdd: number = 1): Promise<number> {
-    const { data, error } = await supabase.rpc('tick_game_clock', { p_inn_id: gameState.innId, ticks_to_add: ticksToAdd });
-    if (error) throw new Error(`Failed to tick game clock: ${error.message}`);
-    return data as number;
 }
 
 /** Get full dashboard stats in a single Postgres call. */
@@ -341,6 +340,7 @@ function rowToPatron(row: PatronRow): IPatron {
         state: row.state as IPatron['state'],
         healthStatus: (row.health_status as IPatron['healthStatus']) ?? 'HEALTHY',
         arrivalTimestamp: row.arrival_timestamp,
+        arrivalDay: 1,  // Hydrated patrons default to day 1 (pre-day-cycle era)
         memoryIds: row.memory_ids,
         eventIds: row.event_ids,
         gold: row.gold ?? 0,
@@ -370,11 +370,11 @@ export async function insertQuest(quest: IQuest, verbosityScore?: number): Promi
         quest_type: quest.type,
         requirements: quest.requirements,
         difficulty_scalar: quest.difficultyScalar,
-        resolution_ticks: quest.resolutionTicks,
+        duration_days: quest.durationDays,
         assigned_patron_id: quest.assignedPatronId,
         posted_by_patron_id: quest.postedByPatronId ?? null,
         status: quest.status,
-        deadline_timestamp: quest.deadlineTimestamp,
+        deadline_days: quest.deadlineDays,
         verbosity_score: verbosityScore ?? 0,
         tag_count: tagCount,
         item_name: quest.itemDetails?.itemName ?? null,
@@ -407,13 +407,13 @@ export async function assignPatronToQuestAtomic(patronId: string, questId: strin
     return data as boolean;
 }
 
-export async function fetchExpiredQuests(simulatedTime: number): Promise<IQuest[]> {
+export async function fetchExpiredQuests(currentDay: number): Promise<IQuest[]> {
     const { data, error } = await supabase
         .from('quests')
         .select('*')
         .eq('inn_id', gameState.innId)
-        .eq('status', 'ACCEPTED')
-        .lte('deadline_timestamp', simulatedTime);
+        .eq('status', 'POSTED')
+        .lte('deadline_days', currentDay);
     if (error) throw new Error(`Failed to fetch expired quests: ${error.message}`);
     return (data as QuestRow[]).map(rowToQuest);
 }
@@ -437,11 +437,11 @@ function rowToQuest(row: QuestRow): IQuest {
         type: (row.quest_type as IQuest['type']) ?? 'subjugation',
         requirements: row.requirements,
         difficultyScalar: row.difficulty_scalar,
-        resolutionTicks: row.resolution_ticks ?? 20,
+        durationDays: row.duration_days ?? 1,
         assignedPatronId: row.assigned_patron_id,
         postedByPatronId: row.posted_by_patron_id ?? null,
         status: row.status as IQuest['status'],
-        deadlineTimestamp: row.deadline_timestamp,
+        deadlineDays: row.deadline_days ?? 3,
     };
     if (row.item_name && row.item_category) {
         quest.itemDetails = {
@@ -560,13 +560,13 @@ export async function fetchAllLoreEntries(): Promise<LoreRow[]> {
 //  EVENT LOG
 // ═══════════════════════════════════════════════════════════════════════
 
-/** Log a game event via Postgres RPC (auto-reads current_tick). */
+/** Log a game event via Postgres RPC. */
 export async function logEvent(
     eventType: string,
     subjectId: string | null,
     subjectType: 'PATRON' | 'QUEST' | 'ITEM' | 'INN' | 'LORE',
     payload: Record<string, unknown> = {},
-    gameTick?: number
+    gameDay?: number
 ): Promise<void> {
     const { error } = await supabase.rpc('log_event', {
         p_inn_id: gameState.innId,
@@ -574,7 +574,7 @@ export async function logEvent(
         p_subject_id: subjectId,
         p_subject_type: subjectType,
         p_payload: payload,
-        p_game_tick: gameTick ?? null,
+        p_game_day: gameDay ?? null,
     });
     if (error) throw new Error(`Failed to log event: ${error.message}`);
 }

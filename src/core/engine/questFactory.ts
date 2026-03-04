@@ -25,9 +25,9 @@ import {
     ALL_SKILL_TAGS,
     createEmptySkillVector,
 } from '../types/entity';
-import { DEFAULT_QUEST_DEADLINE_HOURS, TICK_MULTIPLIER } from '../constants';
+import { DEFAULT_QUEST_DEADLINE_DAYS } from '../constants';
 import { generateUUID, rollInt } from './utils';
-import { ticker } from './ticker';
+import { gameState } from './gameState';
 
 // ── Verbosity Constants ─────────────────────────────────────────────────
 
@@ -358,23 +358,17 @@ export function parseQuestText(text: string, innReputation: number = 0): IQuest 
         ? Math.max(10, Math.min(rawDifficulty, Math.round(totalReqSum * 0.85)))
         : rawDifficulty;
 
-    const now = ticker.simulatedTime;
-
     return {
         id: generateUUID(),
         originalText: text,
         type: 'subjugation', // Mock parser assumes subjugation
         requirements: vector,
         difficultyScalar,
-        resolutionTicks: Math.floor(difficultyScalar * 2), // Mock mapping (10 D = 20 ticks, 50 D = 100 ticks)
+        durationDays: Math.max(1, Math.round(difficultyScalar / 10)), // D=10 → 1 day, D=30 → 3 days, D=50 → 5 days
         assignedPatronId: null,
         postedByPatronId: null,
         status: 'POSTED',
-        // TODO: Deadline math bug — TICK_MULTIPLIER was applied twice, causing
-        // quests to expire in ~24 real seconds instead of ~12 real minutes.
-        // Expiry is disabled (MAX_SAFE_INTEGER) until the mechanic is revisited.
-        // Correct formula when re-enabling: now + (DEFAULT_QUEST_DEADLINE_HOURS * 3600 * 1000)
-        deadlineTimestamp: Number.MAX_SAFE_INTEGER,
+        deadlineDays: gameState.currentDay + DEFAULT_QUEST_DEADLINE_DAYS,
     };
 }
 

@@ -82,9 +82,9 @@ export const QUEST_PARSE_SCHEMA = {
                 type: 'number',
                 description: 'Difficulty scalar from 10 to 50 based on the danger described. If questType is itemRetrieval and the item is very rare, scale this difficulty up proportionally (e.g. 99.00 rarity -> 40+ difficulty).',
             },
-            resolutionTicks: {
+            durationDays: {
                 type: 'number',
-                description: 'The time required to resolve the quest in game ticks, based on the description and difficulty. Easy tasks take 10 ticks. Hard tasks take up to 100 ticks. Intermediate tasks scale accordingly.',
+                description: 'How many in-game days this quest takes to complete. 1 day for trivial tasks, 3 for standard, 5 for legendary.',
             },
             itemDetails: {
                 type: ['object', 'null'],
@@ -120,7 +120,7 @@ export const QUEST_PARSE_SCHEMA = {
                 description: 'Brief explanation of tag choices and verbosity assessment.',
             },
         },
-        required: ['isLegitimate', 'rejectionReason', 'questType', 'skills', 'difficulty', 'resolutionTicks', 'itemDetails', 'consumedItems', 'reasoning'],
+        required: ['isLegitimate', 'rejectionReason', 'questType', 'skills', 'difficulty', 'durationDays', 'itemDetails', 'consumedItems', 'reasoning'],
         additionalProperties: false,
     },
 };

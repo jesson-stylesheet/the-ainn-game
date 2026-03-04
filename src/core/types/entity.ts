@@ -96,7 +96,17 @@ export interface IPatron {
     skills: SkillVector;          // The mathematical anchor
     state: PatronState;
     healthStatus: PatronHealthStatus; // HEALTHY, INJURED, or DEAD
-    arrivalTimestamp: number;     // Unix epoch (ms)
+    arrivalTimestamp: number;     // Unix epoch (ms) — real-world clock for display purposes
+
+    /** In-game day this patron arrived at the inn. */
+    arrivalDay: number;
+
+    /**
+     * Optional: how many in-game days this patron will stay before departing naturally.
+     * Undefined = indefinite stay (patron stays until evicted or dies).
+     * Future feature: DayEngine checks this each End of Day.
+     */
+    stayDuration?: number;
 
     equipment: PatronEquipment;   // Items currently worn/wielded
     inventory: IItem[];           // Items held but not equipped
@@ -121,11 +131,25 @@ export interface IQuest {
     type: QuestType;              // The inferred category of the quest
     requirements: SkillVector;    // Extracted by LLM (or mock)
     difficultyScalar: number;     // D — generally 10–50
-    resolutionTicks: number;      // Ticks to resolve (10=easy, 100=hard)
+
+    /**
+     * How many in-game days this quest takes to resolve once accepted.
+     * Derived from difficultyScalar: D=10 → 1 day, D=30 → 3 days, D=50 → 5 days.
+     * The DayEngine decrements this by 1 on each End of Day.
+     * When it reaches 0, the quest resolves via the probability engine.
+     */
+    durationDays: number;
+
     assignedPatronId: string | null;
     postedByPatronId: string | null; // Patron who posted this quest (prevents self-assignment)
     status: QuestStatus;
-    deadlineTimestamp: number;    // Unix epoch (ms)
+
+    /**
+     * The in-game day number on which this POSTED quest expires if unaccepted.
+     * Set to: currentDay + DEFAULT_QUEST_DEADLINE_DAYS at quest creation.
+     * The DayEngine compares against gameState.currentDay each End of Day.
+     */
+    deadlineDays: number;
 
     // Valid only if QuestType is 'itemRetrieval' or 'crafting'
     itemDetails?: {
@@ -153,6 +177,21 @@ export interface QuestResolutionResult {
     dotProduct: number;           // Raw skill overlap score
     weakestTags: SkillTag[];      // Tags causing highest negative impact
     rawRoll: number;              // The Math.random() that decided fate
+}
+
+// ── End of Day Summary ──────────────────────────────────────────────────
+
+/**
+ * Emitted by the DayEngine after each End of Day processing cycle.
+ * Used by SyncAdapter to update inn_state and by the TUI/server to
+ * present a nightly summary to the player.
+ */
+export interface EndOfDaySummary {
+    day: number;                  // The day that just ended
+    questsResolved: number;       // How many ACCEPTED quests finished
+    questsExpired: number;        // How many POSTED quests hit their deadline
+    patronsDeparted: number;      // How many patrons naturally left (stayDuration reached)
+    reputationGained: number;     // Total reputation earned this day
 }
 
 // ── Archetype Definition ────────────────────────────────────────────────
