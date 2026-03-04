@@ -279,6 +279,7 @@ export function createPatron(race?: Race, job?: Job, innReputation: number = 0):
     const jobBlueprint = JOB_BLUEPRINTS[finalJob];
     const raceBlueprint = RACE_BLUEPRINTS[finalRace];
     const archetypeName = `${capitalize(finalRace)} ${jobBlueprint.name}`;
+    const stayDays = rollInt(3, 15);
 
     return {
         id: generateUUID(),
@@ -289,10 +290,40 @@ export function createPatron(race?: Race, job?: Job, innReputation: number = 0):
         healthStatus: 'HEALTHY',
         arrivalTimestamp: Date.now(),
         arrivalDay: gameState.currentDay,
+        totalStayDuration: stayDays,
+        daysRemaining: stayDays,
         equipment: createEmptyEquipment(),
         inventory: [],
         gold: 0,
         copper: 0,
     };
+}
+
+/**
+ * Revive a recurring patron from the patrons table.
+ * Keeps their original name and DB id but re-rolls skills using
+ * current inn reputation (patrons grow stronger over time).
+ * Equipment is retained because the items table references the same patron id.
+ */
+export function reviveRecurringPatron(
+    originalId: string,
+    originalName: string,
+    archetype: string,
+    innReputation: number = 0,
+): IPatron {
+    // Parse race and job from archetype string ("Human Warrior" → human, warrior)
+    const parts = archetype.split(' ');
+    const racePart = parts[0].toLowerCase() as Race;
+    const jobName = parts.slice(1).join(' ');
+    const jobKey = JOBS.find(j => JOB_BLUEPRINTS[j].name === jobName);
+
+    // Fallback to fully random if parsing fails
+    const finalRace = RACES.includes(racePart) ? racePart : undefined;
+    const finalJob = jobKey ?? undefined;
+
+    const patron = createPatron(finalRace, finalJob, innReputation);
+    patron.id = originalId;   // Reuse the original DB row id
+    patron.name = originalName; // Keep the canonical name
+    return patron;
 }
 

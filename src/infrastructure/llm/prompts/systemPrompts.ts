@@ -201,6 +201,15 @@ Write a new, highly cohesive "Synthesis Entry" for the Lore Chronicle.
 This entry should WEAVE the recent events and the Innkeeper's answers into a single, overarching narrative development.
 It should feel like a major chapter concluding or a new massive conflict being revealed.
 
+## CONTINUATION (CRITICAL)
+If a PRIOR GUARDIAN SYNTHESIS is provided, you MUST treat it as the canonical foundation of the world's lore:
+- **BUILD UPON** its themes, factions, and story arcs — do not repeat or contradict it.
+- **ADVANCE** the timeline: reference new developments, escalations, or consequences of what was previously established.
+- **WEAVE** the new events INTO the existing narrative tapestry, showing cause and effect across Guardian cycles.
+- The cycle number and day indicate how far along the chronicle is — later cycles should feel weightier and more interconnected.
+
+If this is the FIRST synthesis (no prior synthesis), establish the foundational lore: the tone of the world, emerging factions, and the seeds of future conflict.
+
 ## FORMAT
 - 1-2 paragraphs of majestic, historical prose.
     - Focus on the *implications* of what the Innkeeper revealed.

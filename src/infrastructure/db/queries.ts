@@ -38,6 +38,8 @@ interface PatronRow {
     event_ids: string[];
     gold: number;
     copper: number;
+    stay_duration: number;
+    days_remaining: number;
     created_at: string;
     updated_at: string;
 }
@@ -305,6 +307,8 @@ export async function insertPatron(patron: IPatron): Promise<void> {
         event_ids: patron.eventIds ?? [],
         gold: patron.gold ?? 0,
         copper: patron.copper ?? 0,
+        stay_duration: patron.totalStayDuration,
+        days_remaining: patron.daysRemaining,
     });
     if (error) throw new Error(`Failed to insert patron: ${error.message}`);
 }
@@ -341,6 +345,8 @@ function rowToPatron(row: PatronRow): IPatron {
         healthStatus: (row.health_status as IPatron['healthStatus']) ?? 'HEALTHY',
         arrivalTimestamp: row.arrival_timestamp,
         arrivalDay: 1,  // Hydrated patrons default to day 1 (pre-day-cycle era)
+        totalStayDuration: row.stay_duration ?? 7,
+        daysRemaining: row.days_remaining ?? 7,
         memoryIds: row.memory_ids,
         eventIds: row.event_ids,
         gold: row.gold ?? 0,
@@ -355,6 +361,68 @@ function rowToPatron(row: PatronRow): IPatron {
         },
         inventory: [],
     };
+}
+
+/**
+ * Fetch one random DEPARTED patron from this inn who can return.
+ * Excludes DEAD patrons and patrons whose names are already active in the inn.
+ * Returns the full patron row (with original id) or null.
+ */
+export async function fetchRandomRecurringPatron(
+    activePatronNames: string[]
+): Promise<{ id: string; name: string; archetype: string } | null> {
+    let query = supabase
+        .from('patrons')
+        .select('id, name, archetype')
+        .eq('inn_id', gameState.innId)
+        .eq('state', 'DEPARTED')
+        .neq('health_status', 'DEAD');
+
+    if (activePatronNames.length > 0) {
+        // Exclude patrons whose name matches anyone currently in the inn
+        for (const name of activePatronNames) {
+            query = query.neq('name', name);
+        }
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Failed to fetch recurring patrons: ${error.message}`);
+    if (!data || data.length === 0) return null;
+
+    // Pick one at random
+    const pick = data[Math.floor(Math.random() * data.length)];
+    return { id: pick.id, name: pick.name, archetype: pick.archetype };
+}
+
+/**
+ * Update an existing patron row when they return to the inn.
+ * Re-sets skills, state, stay duration, and arrival timestamp.
+ * Equipment is retained — items table references patron by id which stays the same.
+ */
+export async function upsertReturningPatron(patron: IPatron): Promise<void> {
+    const { error } = await supabase
+        .from('patrons')
+        .update({
+            skills: patron.skills,
+            state: patron.state,
+            health_status: patron.healthStatus,
+            arrival_timestamp: patron.arrivalTimestamp,
+            stay_duration: patron.totalStayDuration,
+            days_remaining: patron.daysRemaining,
+        })
+        .eq('id', patron.id)
+        .eq('inn_id', gameState.innId);
+    if (error) throw new Error(`Failed to upsert returning patron: ${error.message}`);
+}
+
+/** Update days_remaining for a patron in the DB. */
+export async function updatePatronDaysRemaining(id: string, daysRemaining: number): Promise<void> {
+    const { error } = await supabase
+        .from('patrons')
+        .update({ days_remaining: daysRemaining })
+        .eq('id', id)
+        .eq('inn_id', gameState.innId);
+    if (error) throw new Error(`Failed to update patron days_remaining: ${error.message}`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -502,6 +570,7 @@ export async function insertLoreEntry(entry: {
     loreText?: string;
     storyText?: string;
     narrativeSeed?: string;
+    gameDay?: number;
 }): Promise<void> {
     const { error } = await supabase.from('lore_chronicle').insert({
         quest_id: entry.questId,
@@ -515,21 +584,23 @@ export async function insertLoreEntry(entry: {
         lore_text: entry.loreText ?? '',
         story_text: entry.storyText ?? '',
         narrative_seed: entry.narrativeSeed ?? null,
+        game_day: entry.gameDay ?? gameState.currentDay,
     });
     if (error) throw new Error(`Failed to insert lore: ${error.message}`);
 }
 
 /**
- * Delete ALL lore entries for the current world.
+ * Delete ALL lore entries for the current inn.
  * Called by the DBSyncAdapter after a Guardian synthesis so the synthesis
  * becomes the sole canonical entry that seeds the next Guardian cycle.
+ * Scoped to inn_id (not world_id) so other inns' lore is preserved.
  */
-export async function deleteAllLoreEntriesByWorld(): Promise<void> {
+export async function deleteInnLoreEntries(): Promise<void> {
     const { error } = await supabase
         .from('lore_chronicle')
         .delete()
-        .eq('world_id', gameState.worldId);
-    if (error) throw new Error(`Failed to delete world lore entries: ${error.message}`);
+        .eq('inn_id', gameState.innId);
+    if (error) throw new Error(`Failed to delete inn lore entries: ${error.message}`);
 }
 
 export async function updateLoreOutcome(

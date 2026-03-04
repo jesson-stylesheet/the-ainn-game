@@ -24,7 +24,7 @@ import * as db from '../../infrastructure/db/queries';
 import type { SkillTag, IPatron, IQuest, QuestResolutionResult, ItemCategory, EquipmentSlot } from '../../core/types/entity';
 import { ALL_SKILL_TAGS } from '../../core/types/entity';
 import { parseQuestWithLLM } from '../../infrastructure/llm/questParser';
-import { renderResolution, renderArrivalNarrative, generatePatronQuest, generateGuardianQuestions, synthesizeLore } from '../../infrastructure/llm/narrativeRenderer';
+import { renderResolution, renderArrivalNarrative, generateGuardianQuestions, synthesizeLore } from '../../infrastructure/llm/narrativeRenderer';
 import { loreGuardian, GUARDIAN_THRESHOLD } from '../../core/engine/loreGuardian';
 
 // ── Colors ──────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ function showStatus(): void {
     console.log(`  ${C.gray}│${C.reset} World:   ${C.dim}${gameState.worldId}${C.reset.padEnd(35)} ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}│${C.reset} Inn:     ${C.dim}${gameState.innId}${C.reset.padEnd(35)} ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}├─────────────────────────────────────────┤${C.reset}`);
-    console.log(`  ${C.gray}│${C.reset} Patrons: ${C.bright}${s.totalPatrons}${C.reset} (${s.idlePatrons} idle, ${s.onQuestPatrons} questing)  ${C.gray}│${C.reset}`);
+    console.log(`  ${C.gray}│${C.reset} Patrons: ${C.bright}${s.totalPatrons}/${9}${C.reset} (${s.idlePatrons} idle, ${s.onQuestPatrons} questing)  ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}│${C.reset} Quests:  ${s.postedQuests} posted, ${C.green}${s.completedQuests}${C.reset} done, ${C.red}${s.failedQuests}${C.reset} failed  ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}│${C.reset} Day:     ${C.bright}${gameState.currentDay}${C.reset}                                ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}│${C.reset} Lore:    ${loreChronicle.size} entries                      ${C.gray}│${C.reset}`);
@@ -234,7 +234,8 @@ async function viewPatrons(rl: readline.Interface): Promise<void> {
             p.state === 'ON_QUEST' ? C.yellow : C.red;
         const healthColor = p.healthStatus === 'HEALTHY' ? C.green :
             p.healthStatus === 'INJURED' ? C.yellow : C.red;
-        console.log(`  ${C.bright}[${i + 1}]${C.reset} ${C.magenta}${p.name}${C.reset} ${C.gray}(${p.archetype})${C.reset} ${stateColor}[${p.state}]${C.reset} ${healthColor}♥${p.healthStatus}${C.reset}`);
+        const stayStr = p.state === 'ON_QUEST' ? `${C.dim}(questing)${C.reset}` : `${C.dim}(${p.daysRemaining}d left)${C.reset}`;
+        console.log(`  ${C.bright}[${i + 1}]${C.reset} ${C.magenta}${p.name}${C.reset} ${C.gray}(${p.archetype})${C.reset} ${stateColor}[${p.state}]${C.reset} ${healthColor}♥${p.healthStatus}${C.reset} ${stayStr}`);
     }
 
     console.log(`\n  ${C.dim}Enter a number to view character sheet, or press Enter to go back.${C.reset}`);
@@ -282,6 +283,7 @@ function printCharacterSheet(p: IPatron): void {
     console.log(`  ${C.gray}╠══════════════════════════════════════════════╣${C.reset}`);
     console.log(`  ${C.gray}║${C.reset}  State:  ${stateColor}${p.state}${C.reset}`);
     console.log(`  ${C.gray}║${C.reset}  Health: ${healthColor}♥ ${p.healthStatus}${C.reset}`);
+    console.log(`  ${C.gray}║${C.reset}  Stay:   ${C.dim}${p.daysRemaining} / ${p.totalStayDuration} days remaining${C.reset}`);
     console.log(`  ${C.gray}║${C.reset}  Since:  ${C.dim}${new Date(p.arrivalTimestamp).toLocaleString()}${C.reset}`);
     console.log(`  ${C.gray}╠══════════════════════════════════════════════╣${C.reset}`);
     console.log(`  ${C.gray}║${C.reset}  ${C.bright}SKILLS${C.reset}`);
@@ -489,7 +491,7 @@ async function endDay(rl: readline.Interface): Promise<void> {
     console.log('');
     const answer = await askQuestion(rl, `  ${C.yellow}End the day and advance to Day ${gameState.currentDay + 1}? (y/N): ${C.reset}`);
     if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
-        const summary = dayEngine.advanceDay();
+        const summary = await dayEngine.advanceDay();
         console.log(`\n  ${C.green}☀ Day ${summary.day} has dawned.${C.reset}`);
         if (summary.questsResolved > 0) {
             console.log(`  ${C.bright}⚔ ${summary.questsResolved} quest(s) resolved!${C.reset} (Check narrative output above)`);
@@ -497,8 +499,21 @@ async function endDay(rl: readline.Interface): Promise<void> {
         if (summary.questsExpired > 0) {
             console.log(`  ${C.red}💀 ${summary.questsExpired} quest(s) expired from the board.${C.reset}`);
         }
+        if (summary.patronsDeparted > 0) {
+            console.log(`  ${C.yellow}🚪 ${summary.patronsDeparted} patron(s) left the inn.${C.reset}`);
+        }
         if (summary.reputationGained > 0) {
             console.log(`  ${C.yellow}★ +${summary.reputationGained} reputation gained!${C.reset}`);
+        }
+
+        // Show new arrivals
+        const newPatrons = gameState.getAllPatrons().filter(p => p.arrivalDay === summary.day);
+        if (newPatrons.length > 0) {
+            console.log(``);
+            for (const p of newPatrons) {
+                console.log(`  ${C.green}🍺${C.reset} ${C.magenta}${p.name}${C.reset} (${p.archetype}) walks through the door! ${C.dim}(staying ${p.totalStayDuration} days)${C.reset}`);
+                printSkills(p.skills, '      ');
+            }
         }
     }
 }
@@ -665,47 +680,7 @@ async function handleGuardianVisit(rl: readline.Interface, recentLore: string): 
     }
 }
 
-// ── Patron Auto-Quest ───────────────────────────────────────────────────
-
-/**
- * When lore > 10 entries and a 50% coin flip succeeds, the arriving
- * patron generates and posts their own quest using the LLM.
- * Can be run manually by enabling the `force` flag.
- */
-async function tryPatronAutoQuest(patron: IPatron, force: boolean = false): Promise<void> {
-    if (!force) {
-        // Guard: need enough world history for meaningful quests
-        if (loreChronicle.size < 10) return;
-
-        // 50% chance
-        if (Math.random() >= 0.5) return;
-    }
-
-    console.log(`\n  ${C.cyan}💬 ${patron.name} scribbles a quest on the board...${C.reset}`);
-
-    try {
-        const loreContext = loreChronicle.getRecentLoreContext(5);
-        const questText = await generatePatronQuest(patron, loreContext);
-
-        console.log(`  ${C.dim}"${questText}"${C.reset}`);
-
-        // Feed the generated text through the normal quest parser
-        const quest = await parseQuestWithLLM(questText, gameState.reputation);
-        quest.postedByPatronId = patron.id;
-        gameState.addQuest(quest);
-
-        const tagCount = ALL_SKILL_TAGS.filter(t => quest.requirements[t] > 0).length;
-        console.log(`  ${C.green}✓ Patron quest posted!${C.reset} ${C.cyan}[${quest.type}]${C.reset} D=${quest.difficultyScalar} | Days=${quest.durationDays} | ${tagCount} tags`);
-        if (quest.itemDetails) {
-            const r = quest.itemDetails.rarity;
-            const rarityColor = r >= 85 ? C.magenta : r >= 60 ? C.yellow : r >= 30 ? C.cyan : C.green;
-            console.log(`    📦 ${quest.itemDetails.quantity}x ${C.bright}${quest.itemDetails.itemName}${C.reset} ${rarityColor}(Rarity: ${r.toFixed(2)})${C.reset}`);
-        }
-        printSkills(quest.requirements, '    ');
-    } catch (error) {
-        console.log(`  ${C.red}Auto-quest failed: ${(error as Error).message}${C.reset}`);
-    }
-}
+// ── Patron Auto-Quest (now handled by DayEngine) ────────────────────────
 
 async function summonPatron(rl: readline.Interface): Promise<void> {
     const jobs = ['Warrior', 'Archer', 'Miner', 'Mechanic', 'Necromancer', 'Wizard', 'Berserker', 'Cleric', 'Geisha', 'Bard', 'Rogue', 'Artisan'];
@@ -715,8 +690,7 @@ async function summonPatron(rl: readline.Interface): Promise<void> {
     }
     console.log(`    ${C.cyan}0${C.reset}. Fully Random (Race & Job via CSV Matrix)`);
 
-    const choiceStr = await askQuestion(rl, 'Choose option (add "q" to force quest, e.g. 1q): ');
-    const forceQuest = choiceStr.toLowerCase().endsWith('q');
+    const choiceStr = await askQuestion(rl, 'Choose option: ');
     const choice = parseInt(choiceStr);
 
     let patron: ReturnType<typeof createPatron>;
@@ -737,8 +711,6 @@ async function summonPatron(rl: readline.Interface): Promise<void> {
 
     const narrative = await renderArrivalNarrative(patron);
     console.log(`  ${C.dim}📖 ${narrative}${C.reset}`);
-
-    await tryPatronAutoQuest(patron, forceQuest);
 }
 
 async function populateInn(): Promise<void> {
@@ -747,8 +719,6 @@ async function populateInn(): Promise<void> {
         const p = createPatron(undefined, undefined, gameState.reputation);
         gameState.addPatron(p);
         console.log(`  ${C.green}✓${C.reset} ${C.magenta}${p.name}${C.reset} (${p.archetype})`);
-
-        await tryPatronAutoQuest(p);
     }
     console.log(`\n  ${C.bright}9 patrons now in the inn.${C.reset}`);
 }
@@ -912,6 +882,20 @@ export async function startTUI(): Promise<void> {
             console.log(`     Weak: ${result.weakestTags.map(t => `${C.red}${t}${C.reset}`).join(', ')}`);
         }
         console.log(`     ${C.dim}📖 Generating tale in background...${C.reset}\n`);
+        rl.prompt(true);
+    });
+
+    eventBus.on('quest:auto_posted', ({ quest, patron }) => {
+        console.log(`\n  ${C.cyan}💬 ${patron.name} scribbles a quest on the board...${C.reset}`);
+        console.log(`  ${C.dim}"${quest.originalText}"${C.reset}`);
+        const tagCount = ALL_SKILL_TAGS.filter(t => quest.requirements[t] > 0).length;
+        console.log(`  ${C.green}✓ Patron quest posted!${C.reset} ${C.cyan}[${quest.type}]${C.reset} D=${quest.difficultyScalar} | Days=${quest.durationDays} | ${tagCount} tags`);
+        if (quest.itemDetails) {
+            const r = quest.itemDetails.rarity;
+            const rarityColor = r >= 85 ? C.magenta : r >= 60 ? C.yellow : r >= 30 ? C.cyan : C.green;
+            console.log(`    📦 ${quest.itemDetails.quantity}x ${C.bright}${quest.itemDetails.itemName}${C.reset} ${rarityColor}(Rarity: ${r.toFixed(2)})${C.reset}`);
+        }
+        printSkills(quest.requirements, '    ');
         rl.prompt(true);
     });
 

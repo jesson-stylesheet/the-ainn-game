@@ -86,13 +86,13 @@ export const CODEX_TOOLS: ToolDefinition[] = [
         type: 'function',
         function: {
             name: 'register_character',
-            description: 'Register a non-player character (NPC) native to the world story.',
+            description: 'Register a non-player character (NPC) native to the world story. Do NOT use this for inn patrons — they are registered automatically.',
             parameters: {
                 type: 'object',
                 properties: {
                     name: { type: 'string', description: 'Unique name of the character.' },
                     description: { type: 'string', description: 'Appearance, personality, and role.' },
-                    characterType: { type: 'string', enum: ['patron', 'story_npc'] }
+                    characterType: { type: 'string', enum: ['story_npc'], description: 'Always story_npc. Patrons are managed separately.' }
                 },
                 required: ['name', 'description', 'characterType']
             }
@@ -173,6 +173,12 @@ export const CODEX_HANDLERS: ToolHandlerRegistry = {
         return results.length > 0 ? results : { status: 'NOT_FOUND', message: `No character matching '${args.query}' exists in the codex.` };
     },
     register_character: async (args: any) => {
+        // Patrons are registered exclusively by the syncAdapter on patron:arrived.
+        // The LLM should only register story NPCs.
+        if (args.characterType === 'patron') {
+            console.log(`[Codex] register_character blocked — patron registration is handled automatically.`);
+            return { status: 'REJECTED', message: 'Patron characters are registered automatically when they arrive at the inn. Use story_npc for world characters.' };
+        }
         const semQuery = `${args.name} ${args.description ?? ''}`;
         const similar = await db.searchCodexCharacterSemantic(semQuery, 0.75, 1);
         if (similar.length > 0) {

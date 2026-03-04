@@ -100,9 +100,9 @@ app.post('/api/quests/assign', (req, res) => {
 });
 
 // 4. Advance Day (the core game loop trigger)
-app.post('/api/day/advance', (req, res) => {
+app.post('/api/day/advance', async (req, res) => {
     try {
-        const summary = dayEngine.advanceDay();
+        const summary = await dayEngine.advanceDay();
         res.json(summary);
     } catch (e) {
         res.status(500).json({ error: (e as Error).message });

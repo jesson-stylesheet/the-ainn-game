@@ -10,6 +10,7 @@ import { chatCompletionStructured, chatCompletion } from './openRouterClient';
 import type { IPatron, IQuest, QuestResolutionResult, PatronHealthStatus } from '../../core/types/entity';
 import { ALL_SKILL_TAGS } from '../../core/types/entity';
 import { loreChronicle } from '../../core/engine/loreChronicle';
+import { gameState } from '../../core/engine/gameState';
 import { CODEX_SEARCH_TOOLS, CODEX_FULL_TOOLS, CODEX_HANDLERS } from './codexTools';
 import { searchCodexMobSemantic, searchCodexItemSemantic, searchCodexFactionSemantic } from '../db/queries';
 
@@ -280,9 +281,10 @@ export async function synthesizeLore(recentLore: string, questions: string[], an
     const qnaPairs = questions.map((q, i) => `Q: ${q}\nA (Innkeeper): ${answers[i] || 'Silence.'}`).join('\n\n');
 
     const priorSynthesis = loreChronicle.getLastSynthesis();
+    const synthesisIdx = loreChronicle.synthesisIndex;
     const priorContext = priorSynthesis
-        ? `\n\nPRIOR GUARDIAN SYNTHESIS (build upon this):\n${priorSynthesis}`
-        : '';
+        ? `\n\nPRIOR GUARDIAN SYNTHESIS (Cycle ${synthesisIdx}, as of Day ${gameState.currentDay} — continue this thread, do not repeat it):\n${priorSynthesis}`
+        : '\n\n(This is the FIRST chronicle synthesis for this inn. Establish the foundational lore.)';
 
     const prompt = `RECENT LORE:\n${recentLore}\n\nGUARDIAN'S QUESTIONS & INNKEEPER'S ANSWERS:\n${qnaPairs}${priorContext}`;
 

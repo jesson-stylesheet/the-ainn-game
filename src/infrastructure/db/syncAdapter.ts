@@ -134,6 +134,17 @@ class DBSyncAdapter {
             if (!isDBEnabled()) return;
             this.dbQueue.push(async () => {
                 await db.updatePatronState(patron.id, patron.state);
+                // Persist final days_remaining before in-memory deletion
+                await db.updatePatronDaysRemaining(patron.id, patron.daysRemaining);
+            });
+        });
+
+        // Returning patron (was DEPARTED, now back) — UPDATE existing row, don't INSERT
+        eventBus.on('patron:returned', ({ patron }) => {
+            if (!isDBEnabled()) return;
+            this.dbQueue.push(async () => {
+                await db.upsertReturningPatron(patron);
+                console.log(`[DBSync] Patron "${patron.name}" returned to the inn (row updated).`);
             });
         });
 
@@ -243,12 +254,12 @@ class DBSyncAdapter {
         });
 
         // ── Lore Guardian Synthesis
-        eventBus.on('lore:synthesis_finalized', ({ synthesisText, questionsAndAnswersText }) => {
+        eventBus.on('lore:synthesis_finalized', ({ synthesisText, questionsAndAnswersText, gameDay }) => {
             if (!isDBEnabled()) return;
             this.dbQueue.push(async () => {
                 try {
-                    // 1. Wipe ALL lore entries for this world — every inn in the world is cleared.
-                    await db.deleteAllLoreEntriesByWorld();
+                    // 1. Wipe ALL lore entries for this inn — scoped to inn_id, not world_id.
+                    await db.deleteInnLoreEntries();
                     // 2. Insert the synthesis as the single canonical seed entry.
                     await db.insertLoreEntry({
                         questId: null,
@@ -258,8 +269,9 @@ class DBSyncAdapter {
                         patronArchetype: 'Celestial Observer',
                         loreText: synthesisText,
                         storyText: 'The Guardian weaves the threads of fate.',
+                        gameDay,
                     });
-                    console.log('[DBSync] World lore replaced with Guardian synthesis.');
+                    console.log('[DBSync] Inn lore replaced with Guardian synthesis.');
                 } catch (e) {
                     console.error('[DBSync] lore:synthesis_finalized failed in queue:', e);
                 }
@@ -277,7 +289,17 @@ class DBSyncAdapter {
                         copper: gameState.innCopper,
                         reputation: gameState.reputation,
                     });
-                    console.log(`[DBSync] End of Day ${summary.day} saved. Resolved: ${summary.questsResolved}, Expired: ${summary.questsExpired}`);
+
+                    // Persist updated days_remaining for all active patrons
+                    for (const patron of gameState.getAllPatrons()) {
+                        try {
+                            await db.updatePatronDaysRemaining(patron.id, patron.daysRemaining);
+                        } catch (e) {
+                            console.warn(`[DBSync] Failed to update days_remaining for ${patron.name}:`, (e as Error).message);
+                        }
+                    }
+
+                    console.log(`[DBSync] End of Day ${summary.day} saved. Resolved: ${summary.questsResolved}, Expired: ${summary.questsExpired}, Departed: ${summary.patronsDeparted}`);
                 } catch (e) {
                     console.error('[DBSync] day:ended failed in queue:', e);
                 }

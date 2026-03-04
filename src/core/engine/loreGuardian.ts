@@ -2,7 +2,7 @@
  * ═══════════════════════════════════════════════════════════════════════
  * THE AINN ENGINE — Lore Guardian
  * ═══════════════════════════════════════════════════════════════════════
- * The Guardian of Chronicles visits the inn periodically (every 25 lore entries
+ * The Guardian of Chronicles visits the inn periodically (every 12 lore entries
  * or when manually summoned). The Guardian synthesizes recent events, asks the
  * Innkeeper 3 questions to connect lore threads, and weaves a new cohesive
  * synthesis entry into the Chronicle.
@@ -10,6 +10,7 @@
 
 import { loreChronicle } from './loreChronicle';
 import { eventBus } from './eventBus';
+import { gameState } from './gameState';
 
 
 export const GUARDIAN_THRESHOLD = 12;
@@ -41,16 +42,19 @@ class LoreGuardian {
     /**
      * Once the synthesis is complete, this method is called to finalize the Guardian's visit.
      * Replaces ALL in-memory lore entries with just the synthesis (the new canonical seed),
-     * then emits `lore:synthesis_finalized` so the DB layer can mirror the same replacement.
+     * EXCEPT for prior syntheses created by the same inn — those are the continuity chain.
+     * Emits `lore:synthesis_finalized` so the DB layer can mirror the same replacement.
      */
     finalizeVisit(synthesisEntry: string, questionsAndAnswersText: string): void {
         // Replace every prior entry with the single synthesis — both regular lore and old syntheses.
         loreChronicle.replaceWithSynthesis(synthesisEntry, questionsAndAnswersText);
 
-        // Signal the DB sync layer to wipe world lore and persist only this synthesis.
+        // Signal the DB sync layer to wipe inn lore and persist only this synthesis.
         eventBus.emit('lore:synthesis_finalized', {
             synthesisText: synthesisEntry,
             questionsAndAnswersText,
+            gameDay: gameState.currentDay,
+            synthesisIndex: loreChronicle.synthesisIndex,
         });
     }
 }

@@ -101,12 +101,11 @@ export interface IPatron {
     /** In-game day this patron arrived at the inn. */
     arrivalDay: number;
 
-    /**
-     * Optional: how many in-game days this patron will stay before departing naturally.
-     * Undefined = indefinite stay (patron stays until evicted or dies).
-     * Future feature: DayEngine checks this each End of Day.
-     */
-    stayDuration?: number;
+    /** Total number of days this patron will stay at the inn (rolled at creation, 3-15). */
+    totalStayDuration: number;
+
+    /** Days remaining before natural departure. Decremented each End of Day (paused while questing). */
+    daysRemaining: number;
 
     equipment: PatronEquipment;   // Items currently worn/wielded
     inventory: IItem[];           // Items held but not equipped
@@ -183,7 +182,7 @@ export interface QuestResolutionResult {
 
 /**
  * Emitted by the DayEngine after each End of Day processing cycle.
- * Used by SyncAdapter to update inn_state and by the TUI/server to
+ * Used by SyncAdapter to update inn's state and by the TUI/server to
  * present a nightly summary to the player.
  */
 export interface EndOfDaySummary {
@@ -191,6 +190,8 @@ export interface EndOfDaySummary {
     questsResolved: number;       // How many ACCEPTED quests finished
     questsExpired: number;        // How many POSTED quests hit their deadline
     patronsDeparted: number;      // How many patrons naturally left (stayDuration reached)
+    patronsInInn: number;         // Total patrons currently in the inn
+    patronsQuesting: number;      // How many patrons are currently ON_QUEST
     reputationGained: number;     // Total reputation earned this day
 }
 

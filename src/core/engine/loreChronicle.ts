@@ -24,6 +24,7 @@ export interface LoreEntry {
 class LoreChronicle {
     private entries: LoreEntry[] = [];
     private unacknowledgedCount = 0;
+    private synthesisCount = 0;
 
     /**
      * Record a completed quest resolution with LLM-generated lore and story.
@@ -75,6 +76,7 @@ class LoreChronicle {
      * the new synthesis survives as the seed for the next Guardian cycle.
      */
     replaceWithSynthesis(synthesisText: string, questionsAndAnswersText: string = ''): void {
+        this.synthesisCount++;
         this.entries = [{
             timestamp: Date.now(),
             questId: null,
@@ -86,6 +88,14 @@ class LoreChronicle {
             storyText: 'The Guardian weaves the threads of fate.',
         }];
         this.unacknowledgedCount = 0;
+    }
+
+    /**
+     * How many Guardian synthesis cycles have occurred for this inn.
+     * Used to give the LLM a sense of continuity ("this is cycle 3").
+     */
+    get synthesisIndex(): number {
+        return this.synthesisCount;
     }
 
     /**
@@ -187,12 +197,15 @@ class LoreChronicle {
         // or we just reset the counter to 0 upon start to avoid instant Guardian trigger
         // unless the user specifically wants to catch up.
         this.unacknowledgedCount = 0;
+        // Restore synthesis count from hydrated entries so continuity survives restarts.
+        this.synthesisCount = entries.filter(e => e.outcome === 'SYNTHESIS').length;
     }
 
     /** Reset for testing. */
     reset(): void {
         this.entries = [];
         this.unacknowledgedCount = 0;
+        this.synthesisCount = 0;
     }
 }
 

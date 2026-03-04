@@ -14,10 +14,12 @@ import type { IPatron, IQuest, QuestResolutionResult, IItem, EndOfDaySummary } f
 export interface GameEvents {
     'patron:arrived': { patron: IPatron };
     'patron:departed': { patron: IPatron; reason: string };
+    'patron:returned': { patron: IPatron };
     'quest:posted': { quest: IQuest };
     'quest:accepted': { quest: IQuest; patron: IPatron };
     'quest:expired': { quest: IQuest };
     'quest:resolved': { result: QuestResolutionResult; patron: IPatron; quest: IQuest };
+    'quest:auto_posted': { quest: IQuest; patron: IPatron };
     'item:added': { item: IItem };
     'item:equipped': { item: IItem, patronId: string, slot: string };
     'item:unequipped': { item: IItem, patronId: string, slot: string };
@@ -33,7 +35,7 @@ export interface GameEvents {
     'day:started': { day: number };
     'day:ended': EndOfDaySummary;
     'lore:guardian_arrived': { recentLore: string };
-    'lore:synthesis_finalized': { synthesisText: string; questionsAndAnswersText: string };
+    'lore:synthesis_finalized': { synthesisText: string; questionsAndAnswersText: string; gameDay: number; synthesisIndex: number };
     'inn:reputation_gained': { amount: number, total: number };
 }
 

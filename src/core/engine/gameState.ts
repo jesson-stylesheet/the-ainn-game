@@ -32,7 +32,7 @@ class GameState {
     }
 
     // ── Inn Global State ────────────────────────────────────────────────
-    private _currentDay = 1;
+    private _currentDay = 0;
     private _innGold = 100;
     private _innCopper = 0;
     private _reputation = 0;
@@ -65,6 +65,16 @@ class GameState {
     addPatron(patron: IPatron): void {
         this.patrons.set(patron.id, patron);
         eventBus.emit('patron:arrived', { patron });
+    }
+
+    /**
+     * Re-add a returning patron (from DEPARTED state) into active play.
+     * Emits 'patron:returned' instead of 'patron:arrived' so the SyncAdapter
+     * knows to UPDATE the existing DB row rather than INSERT a new one.
+     */
+    returnPatron(patron: IPatron): void {
+        this.patrons.set(patron.id, patron);
+        eventBus.emit('patron:returned', { patron });
     }
 
     getPatron(id: string): IPatron | undefined {
@@ -105,6 +115,33 @@ class GameState {
         eventBus.emit('patron:departed', { patron, reason });
         this.patrons.delete(id);
         return true;
+    }
+
+    /**
+     * Decrement daysRemaining for all patrons not currently questing or awaiting narrative.
+     * Auto-evicts patrons whose stay has expired.
+     * Called by DayEngine on each End of Day.
+     */
+    decrementPatronStays(): IPatron[] {
+        const departed: IPatron[] = [];
+        for (const patron of this.patrons.values()) {
+            // Skip questing / awaiting patrons — their stay is paused
+            if (patron.state === 'ON_QUEST' || patron.state === 'AWAITING_NARRATIVE') continue;
+            // Skip already departed or dead
+            if (patron.state === 'DEPARTED' || patron.state === 'DEAD') continue;
+
+            patron.daysRemaining--;
+            if (patron.daysRemaining <= 0) {
+                departed.push({ ...patron }); // snapshot before eviction
+                this.evictPatron(patron.id, 'Stay duration expired');
+            }
+        }
+        return departed;
+    }
+
+    /** Returns the number of active (non-departed, non-dead) patrons currently in the inn. */
+    getActivePatronCount(): number {
+        return this.patrons.size;
     }
 
     // ── Quests ──────────────────────────────────────────────────────────
@@ -397,7 +434,7 @@ class GameState {
         this.quests.clear();
         this.resolvedResults = [];
         this.items.clear();
-        this._currentDay = 1;
+        this._currentDay = 0;
         this._innGold = 100;
         this._innCopper = 0;
         this._reputation = 0;
