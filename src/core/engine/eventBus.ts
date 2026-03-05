@@ -15,6 +15,7 @@ export interface GameEvents {
     'patron:arrived': { patron: IPatron };
     'patron:departed': { patron: IPatron; reason: string };
     'patron:returned': { patron: IPatron };
+    'patron:recovered': { patron: IPatron };
     'quest:posted': { quest: IQuest };
     'quest:accepted': { quest: IQuest; patron: IPatron };
     'quest:expired': { quest: IQuest };

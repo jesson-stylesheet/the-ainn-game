@@ -292,11 +292,13 @@ export function createPatron(race?: Race, job?: Job, innReputation: number = 0):
         arrivalDay: gameState.currentDay,
         totalStayDuration: stayDays,
         daysRemaining: stayDays,
+        injuryRecoveryDays: 0,
         equipment: createEmptyEquipment(),
         inventory: [],
         gold: 0,
         copper: 0,
     };
+
 }
 
 /**

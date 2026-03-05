@@ -40,6 +40,7 @@ interface PatronRow {
     copper: number;
     stay_duration: number;
     days_remaining: number;
+    injury_recovery_days: number;
     created_at: string;
     updated_at: string;
 }
@@ -309,6 +310,7 @@ export async function insertPatron(patron: IPatron): Promise<void> {
         copper: patron.copper ?? 0,
         stay_duration: patron.totalStayDuration,
         days_remaining: patron.daysRemaining,
+        injury_recovery_days: patron.injuryRecoveryDays ?? 0,
     });
     if (error) throw new Error(`Failed to insert patron: ${error.message}`);
 }
@@ -349,6 +351,7 @@ function rowToPatron(row: PatronRow): IPatron {
         arrivalDay: 1,  // Hydrated patrons default to day 1 (pre-day-cycle era)
         totalStayDuration: row.stay_duration ?? 7,
         daysRemaining: row.days_remaining ?? 7,
+        injuryRecoveryDays: row.injury_recovery_days ?? 0,
         memoryIds: row.memory_ids,
         eventIds: row.event_ids,
         gold: row.gold ?? 0,
@@ -425,6 +428,16 @@ export async function updatePatronDaysRemaining(id: string, daysRemaining: numbe
         .eq('id', id)
         .eq('inn_id', gameState.innId);
     if (error) throw new Error(`Failed to update patron days_remaining: ${error.message}`);
+}
+
+/** Update injury_recovery_days and health_status for a patron in the DB. */
+export async function updatePatronInjuryState(id: string, injuryRecoveryDays: number, healthStatus: string): Promise<void> {
+    const { error } = await supabase
+        .from('patrons')
+        .update({ injury_recovery_days: injuryRecoveryDays, health_status: healthStatus })
+        .eq('id', id)
+        .eq('inn_id', gameState.innId);
+    if (error) throw new Error(`Failed to update patron injury state: ${error.message}`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -592,16 +605,18 @@ export async function insertLoreEntry(entry: {
 }
 
 /**
- * Delete ALL lore entries for the current inn.
- * Called by the DBSyncAdapter after a Guardian synthesis so the synthesis
- * becomes the sole canonical entry that seeds the next Guardian cycle.
+ * Delete all NON-SYNTHESIS lore entries for the current inn.
+ * Called by the DBSyncAdapter after a Guardian synthesis so the regular quest
+ * lore (absorbed into the synthesis) is cleared. SYNTHESIS entries are permanent
+ * records of each Guardian cycle and are intentionally preserved for continuity.
  * Scoped to inn_id (not world_id) so other inns' lore is preserved.
  */
 export async function deleteInnLoreEntries(): Promise<void> {
     const { error } = await supabase
         .from('lore_chronicle')
         .delete()
-        .eq('inn_id', gameState.innId);
+        .eq('inn_id', gameState.innId)
+        .neq('outcome', 'SYNTHESIS');
     if (error) throw new Error(`Failed to delete inn lore entries: ${error.message}`);
 }
 
@@ -909,6 +924,23 @@ export async function searchCodexRecipeSemantic(query: string, matchThreshold: n
     if (error) throw new Error(`Failed to semantic search recipes: ${error.message}`);
     return (data as any[]).map(row => ({
         id: row.id, name: row.name, description: row.description, craftedItemId: row.crafted_item_id, discoveredAt: row.discovered_at
+    }));
+}
+
+/**
+ * Fetch all materials (ingredients) for a given recipe.
+ * Returns an array with the material item name, id, and quantity.
+ */
+export async function fetchRecipeMaterials(recipeId: string): Promise<{ materialItemId: string; materialName: string; quantity: number }[]> {
+    const { data, error } = await supabase
+        .from('codex_recipe_materials')
+        .select('material_item_id, quantity, codex_items(name)')
+        .eq('recipe_id', recipeId);
+    if (error) throw new Error(`Failed to fetch recipe materials: ${error.message}`);
+    return (data as any[]).map(row => ({
+        materialItemId: row.material_item_id,
+        materialName: row.codex_items?.name ?? 'Unknown',
+        quantity: row.quantity,
     }));
 }
 

@@ -112,6 +112,9 @@ class GameState {
         }
 
         patron.state = 'DEPARTED';
+        // Reset health so if this patron returns, they start fresh (not perpetually injured).
+        patron.healthStatus = 'HEALTHY';
+        patron.injuryRecoveryDays = 0;
         eventBus.emit('patron:departed', { patron, reason });
         this.patrons.delete(id);
         return true;
@@ -129,6 +132,19 @@ class GameState {
             if (patron.state === 'ON_QUEST' || patron.state === 'AWAITING_NARRATIVE') continue;
             // Skip already departed or dead
             if (patron.state === 'DEPARTED' || patron.state === 'DEAD') continue;
+
+            // ── Injury Recovery Tick ──────────────────────────────────────────
+            // INJURED patrons who are idle or lounging accumulate recovery days.
+            // After INJURY_RECOVERY_DAYS consecutive idle days, they become HEALTHY.
+            if (patron.healthStatus === 'INJURED') {
+                patron.injuryRecoveryDays++;
+                if (patron.injuryRecoveryDays >= 3) {
+                    patron.healthStatus = 'HEALTHY';
+                    patron.injuryRecoveryDays = 0;
+                    eventBus.emit('patron:recovered', { patron });
+                    console.log(`✦ ${patron.name} has recovered from their injuries after resting.`);
+                }
+            }
 
             patron.daysRemaining--;
             if (patron.daysRemaining <= 0) {
@@ -176,6 +192,9 @@ class GameState {
 
         if (patron.state !== 'IDLE' && patron.state !== 'LOUNGING') {
             return { ok: false, error: `Patron is currently ${patron.state}` };
+        }
+        if (patron.healthStatus === 'INJURED') {
+            return { ok: false, error: `${patron.name} is INJURED and must rest before taking a quest (${3 - patron.injuryRecoveryDays} day(s) remaining)` };
         }
         if (quest.status !== 'POSTED') {
             return { ok: false, error: `Quest is already ${quest.status}` };

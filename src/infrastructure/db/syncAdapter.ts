@@ -290,12 +290,14 @@ class DBSyncAdapter {
                         reputation: gameState.reputation,
                     });
 
-                    // Persist updated days_remaining for all active patrons
+                    // Persist updated stay and injury state for all active patrons
                     for (const patron of gameState.getAllPatrons()) {
                         try {
                             await db.updatePatronDaysRemaining(patron.id, patron.daysRemaining);
+                            // Always persist injury state — needed for recovery tracking across restarts
+                            await db.updatePatronInjuryState(patron.id, patron.injuryRecoveryDays, patron.healthStatus);
                         } catch (e) {
-                            console.warn(`[DBSync] Failed to update days_remaining for ${patron.name}:`, (e as Error).message);
+                            console.warn(`[DBSync] Failed to update patron state for ${patron.name}:`, (e as Error).message);
                         }
                     }
 

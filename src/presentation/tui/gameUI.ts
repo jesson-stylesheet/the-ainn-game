@@ -69,7 +69,10 @@ function showStatus(): void {
     console.log(`  ${C.gray}│${C.reset} Patrons: ${C.bright}${s.totalPatrons}/${9}${C.reset} (${s.idlePatrons} idle, ${s.onQuestPatrons} questing)  ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}│${C.reset} Quests:  ${s.postedQuests} posted, ${C.green}${s.completedQuests}${C.reset} done, ${C.red}${s.failedQuests}${C.reset} failed  ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}│${C.reset} Day:     ${C.bright}${gameState.currentDay}${C.reset}                                ${C.gray}│${C.reset}`);
-    console.log(`  ${C.gray}│${C.reset} Lore:    ${loreChronicle.size} entries                      ${C.gray}│${C.reset}`);
+    const loreUnacked = loreChronicle.unacknowledgedEntriesCount;
+    const loreSyntheses = loreChronicle.getAllSyntheses().length;
+    console.log(`  ${C.gray}│${C.reset} Lore:    ${loreUnacked}/${GUARDIAN_THRESHOLD} new (${loreSyntheses} syntheses)             ${C.gray}│${C.reset}`);
+
     console.log(`  ${C.gray}│${C.reset} Mode:    ${modes}                     ${C.gray}│${C.reset}`);
     console.log(`  ${C.gray}└─────────────────────────────────────────┘${C.reset}`);
 }

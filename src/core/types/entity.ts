@@ -107,6 +107,14 @@ export interface IPatron {
     /** Days remaining before natural departure. Decremented each End of Day (paused while questing). */
     daysRemaining: number;
 
+    /**
+     * Tracks consecutive idle/lounging days while INJURED.
+     * Increments each End of Day when state is IDLE or LOUNGING and health is INJURED.
+     * Resets to 0 when the patron quests or recovers to HEALTHY.
+     * After INJURY_RECOVERY_DAYS idle days, health resets to HEALTHY.
+     */
+    injuryRecoveryDays: number;
+
     equipment: PatronEquipment;   // Items currently worn/wielded
     inventory: IItem[];           // Items held but not equipped
 

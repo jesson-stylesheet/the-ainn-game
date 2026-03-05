@@ -90,7 +90,7 @@ export async function parseQuestStructured(text: string, inventoryContext: strin
             model: 'google/gemini-3.1-flash-lite-preview',
             temperature: 0.2,
             maxTokens: 512,
-            tools: CODEX_SEARCH_TOOLS,
+            tools: CODEX_FULL_TOOLS,
             toolHandlers: CODEX_HANDLERS,
             tool_choice: 'auto',
             maxToolRounds: 8
@@ -280,11 +280,16 @@ export async function synthesizeLore(recentLore: string, questions: string[], an
 
     const qnaPairs = questions.map((q, i) => `Q: ${q}\nA (Innkeeper): ${answers[i] || 'Silence.'}`).join('\n\n');
 
-    const priorSynthesis = loreChronicle.getLastSynthesis();
+    // Build the full synthesis chain for continuity — pass ALL prior cycles as numbered chapters.
+    const allSyntheses = loreChronicle.getAllSyntheses();
     const synthesisIdx = loreChronicle.synthesisIndex;
-    const priorContext = priorSynthesis
-        ? `\n\nPRIOR GUARDIAN SYNTHESIS (Cycle ${synthesisIdx}, as of Day ${gameState.currentDay} — continue this thread, do not repeat it):\n${priorSynthesis}`
-        : '\n\n(This is the FIRST chronicle synthesis for this inn. Establish the foundational lore.)';
+    let priorContext: string;
+    if (allSyntheses.length === 0) {
+        priorContext = '\n\n(This is the FIRST chronicle synthesis for this inn. Establish the foundational lore.)';
+    } else {
+        const chapters = allSyntheses.map((s, i) => `--- Chapter ${i + 1} ---\n${s.loreText}`).join('\n\n');
+        priorContext = `\n\nPRIOR GUARDIAN SYNTHESES (${allSyntheses.length} chapters — Cycle ${synthesisIdx}, as of Day ${gameState.currentDay}):\n${chapters}\n\nThe new synthesis is Chapter ${allSyntheses.length + 1}. Continue from here.`;
+    }
 
     const prompt = `RECENT LORE:\n${recentLore}\n\nGUARDIAN'S QUESTIONS & INNKEEPER'S ANSWERS:\n${qnaPairs}${priorContext}`;
 

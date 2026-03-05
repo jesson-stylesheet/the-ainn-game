@@ -77,16 +77,22 @@ class LoreChronicle {
      */
     replaceWithSynthesis(synthesisText: string, questionsAndAnswersText: string = ''): void {
         this.synthesisCount++;
-        this.entries = [{
-            timestamp: Date.now(),
-            questId: null,
-            originalText: questionsAndAnswersText,
-            outcome: 'SYNTHESIS',
-            patronName: 'The Chronicle Guardian',
-            patronArchetype: 'Celestial Observer',
-            loreText: synthesisText,
-            storyText: 'The Guardian weaves the threads of fate.',
-        }];
+        // Keep only previous SYNTHESIS entries — quest lore entries are consumed & discarded.
+        // This lets us preserve the chain of Guardian cycles as a continuing story.
+        const previousSyntheses = this.entries.filter(e => e.outcome === 'SYNTHESIS');
+        this.entries = [
+            ...previousSyntheses,
+            {
+                timestamp: Date.now(),
+                questId: null,
+                originalText: questionsAndAnswersText,
+                outcome: 'SYNTHESIS',
+                patronName: 'The Chronicle Guardian',
+                patronArchetype: 'Celestial Observer',
+                loreText: synthesisText,
+                storyText: 'The Guardian weaves the threads of fate.',
+            }
+        ];
         this.unacknowledgedCount = 0;
     }
 
@@ -183,6 +189,14 @@ class LoreChronicle {
         return null;
     }
 
+    /**
+     * Get all synthesis entries in chronological order.
+     * Used to provide the LLM the full chain of Guardian cycles for a continuing story.
+     */
+    getAllSyntheses(): LoreEntry[] {
+        return this.entries.filter(e => e.outcome === 'SYNTHESIS');
+    }
+
     /** Total entries. */
     get size(): number {
         return this.entries.length;
@@ -193,12 +207,15 @@ class LoreChronicle {
      */
     hydrate(entries: LoreEntry[]): void {
         this.entries = [...entries];
-        // We assume all loaded entries are already "acknowledged" by a prior synthesis
-        // or we just reset the counter to 0 upon start to avoid instant Guardian trigger
-        // unless the user specifically wants to catch up.
-        this.unacknowledgedCount = 0;
         // Restore synthesis count from hydrated entries so continuity survives restarts.
         this.synthesisCount = entries.filter(e => e.outcome === 'SYNTHESIS').length;
+        // Re-calculate unacknowledgedCount: count all non-synthesis entries that appear
+        // AFTER the last synthesis entry (if any). These are the ones not yet reviewed by the Guardian.
+        const lastSynthesisIdx = entries.reduce((lastIdx, e, i) => e.outcome === 'SYNTHESIS' ? i : lastIdx, -1);
+        this.unacknowledgedCount = entries
+            .slice(lastSynthesisIdx + 1)
+            .filter(e => e.outcome !== 'SYNTHESIS')
+            .length;
     }
 
     /** Reset for testing. */

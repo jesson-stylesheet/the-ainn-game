@@ -127,6 +127,48 @@ export const CODEX_TOOLS: ToolDefinition[] = [
                 required: ['name', 'description', 'alignment']
             }
         }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'search_recipe',
+            description: 'Search the World Codex for an existing crafting recipe by name or description.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    query: { type: 'string', description: 'Search term or partial description to semantically match the recipe (RAG query).' }
+                },
+                required: ['query']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'register_recipe',
+            description: 'Register a newly invented crafting recipe into the World Codex. Only call this if search_recipe returned NOT_FOUND.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    name: { type: 'string', description: 'Unique name of the recipe (e.g. "Health Potion", "Iron Sword").' },
+                    description: { type: 'string', description: 'How the recipe is crafted and what makes it special.' },
+                    craftedItemName: { type: 'string', description: 'The name of the item this recipe produces. Must match an existing codex item.' },
+                    materials: {
+                        type: 'array',
+                        description: 'List of required crafting materials. Each must reference an existing codex item by name.',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                itemName: { type: 'string', description: 'Name of the material item (must exist in the codex).' },
+                                quantity: { type: 'number', description: 'How many of this material are needed.' }
+                            },
+                            required: ['itemName', 'quantity']
+                        }
+                    }
+                },
+                required: ['name', 'description', 'craftedItemName', 'materials']
+            }
+        }
     }
 ];
 
@@ -134,7 +176,8 @@ export const CODEX_SEARCH_TOOLS: ToolDefinition[] = [
     CODEX_TOOLS[0], // search_mob
     CODEX_TOOLS[2], // search_item
     CODEX_TOOLS[4], // search_character
-    CODEX_TOOLS[6]  // search_faction
+    CODEX_TOOLS[6], // search_faction
+    CODEX_TOOLS[8], // search_recipe
 ];
 
 export const CODEX_FULL_TOOLS = CODEX_TOOLS;
@@ -199,5 +242,48 @@ export const CODEX_HANDLERS: ToolHandlerRegistry = {
             return { status: 'ALREADY_EXISTS', message: `A similar faction already exists in the codex.`, existing: similar[0] };
         }
         return await db.insertCodexFaction(args);
+    },
+    search_recipe: async (args: { query: string }) => {
+        const results = await db.searchCodexRecipeSemantic(args.query);
+        if (results.length > 0) {
+            // For each recipe, also fetch its materials for the LLM to see
+            const enriched = await Promise.all(results.map(async (r) => {
+                const mats = await db.fetchRecipeMaterials(r.id!);
+                return { ...r, materials: mats };
+            }));
+            return enriched;
+        }
+        return { status: 'NOT_FOUND', message: `No recipe matching '${args.query}' exists in the codex.` };
+    },
+    register_recipe: async (args: any) => {
+        // Semantic pre-check
+        const semQuery = `${args.name} ${args.description ?? ''}`;
+        const similar = await db.searchCodexRecipeSemantic(semQuery, 0.75, 1);
+        if (similar.length > 0) {
+            console.log(`[Codex] register_recipe blocked — "${args.name}" is semantically similar to existing recipe "${similar[0].name}"`);
+            return { status: 'ALREADY_EXISTS', message: `A similar recipe already exists in the codex.`, existing: similar[0] };
+        }
+
+        // Resolve craftedItemName → craftedItemId from the codex
+        const craftedItem = await db.searchCodexItemByName(args.craftedItemName);
+        if (!craftedItem) {
+            return { status: 'REJECTED', message: `Crafted item "${args.craftedItemName}" not found in the codex. Register it first with register_item.` };
+        }
+
+        // Resolve each material name → materialItemId
+        const materials: { materialItemId: string; quantity: number }[] = [];
+        for (const mat of args.materials) {
+            const item = await db.searchCodexItemByName(mat.itemName);
+            if (!item) {
+                return { status: 'REJECTED', message: `Material "${mat.itemName}" not found in the codex. Register it first with register_item.` };
+            }
+            materials.push({ materialItemId: item.id!, quantity: mat.quantity });
+        }
+
+        const recipe = await db.insertCodexRecipe(
+            { name: args.name, description: args.description, craftedItemId: craftedItem.id! },
+            materials.map(m => ({ recipeId: '', materialItemId: m.materialItemId, quantity: m.quantity }))
+        );
+        return recipe;
     }
 };

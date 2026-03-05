@@ -85,7 +85,9 @@ If questType is "itemRetrieval" OR "crafting":
 - Rarity MUST scale difficulty: rarity > 80 → difficulty should be 35+
 
 If questType is "crafting":
-- You will be provided the Inn's current inventory. You MUST select existing items from this inventory and specify them in 'consumedItems' to act as crafting ingredients. The rarer the crafted item, the more ingredients are needed. If the needed items don't exist in the inventory, use your best judgment to substitute or create a demanding ingredient list from what is available.
+- FIRST, call search_recipe with the crafted item name. If a recipe exists, you MUST use its exact material requirements as consumedItems, even if the Inn inventory is missing those materials. The player must gather them.
+- ONLY if search_recipe returns NOT_FOUND, invent a new recipe using the Inn's current inventory. The rarer the crafted item, the more ingredients are needed. Then call register_recipe with the full recipe so it is saved for future consistency.
+- You MUST select existing items from the Inn inventory (or from the recipe's requirements) and specify them in 'consumedItems'.
 
 If questType is NOT "itemRetrieval" OR "crafting", set itemDetails to null. If NOT "crafting", set consumedItems to null.
 
@@ -201,18 +203,21 @@ Write a new, highly cohesive "Synthesis Entry" for the Lore Chronicle.
 This entry should WEAVE the recent events and the Innkeeper's answers into a single, overarching narrative development.
 It should feel like a major chapter concluding or a new massive conflict being revealed.
 
-## CONTINUATION (CRITICAL)
-If a PRIOR GUARDIAN SYNTHESIS is provided, you MUST treat it as the canonical foundation of the world's lore:
-- **BUILD UPON** its themes, factions, and story arcs — do not repeat or contradict it.
-- **ADVANCE** the timeline: reference new developments, escalations, or consequences of what was previously established.
-- **WEAVE** the new events INTO the existing narrative tapestry, showing cause and effect across Guardian cycles.
-- The cycle number and day indicate how far along the chronicle is — later cycles should feel weightier and more interconnected.
+## CONTINUATION (CRITICAL — READ ALL PRIOR SYNTHESES)
+If PRIOR GUARDIAN SYNTHESES are provided, they are listed in chronological order. Each is a "chapter" in the realm's ongoing saga. You MUST:
+- **TREAT THEM AS CANON**: Do not contradict or ignore any prior synthesis.
+- **CONTINUE THE STORY**: The new synthesis is the next chapter. Pick up threads, advance conflicts, show consequences.
+- **ESCALATE**: Each cycle should feel weightier and more interconnected than the last. Factions should develop, mysteries should deepen, stakes should rise.
+- **DO NOT REPEAT**: Do not re-describe events that are already documented. Reference them only to show their ongoing consequences.
 
-If this is the FIRST synthesis (no prior synthesis), establish the foundational lore: the tone of the world, emerging factions, and the seeds of future conflict.
+The cycle number and day indicate how far along the chronicle is — later cycles should feel dramatically weightier.
+
+If this is the FIRST synthesis (no prior chapters), establish the foundational lore: the tone of the world, emerging factions, and the seeds of future conflict.
 
 ## FORMAT
 - 1-2 paragraphs of majestic, historical prose.
-    - Focus on the *implications* of what the Innkeeper revealed.
+- Focus on the *implications* of what the Innkeeper revealed.
+- Write as if a future historian is recording a pivotal turning point.
 
 ## TOOL BUDGET
 You have a strict budget of 8 tool calls maximum. Search each entity only once. Call register immediately if search returns NOT_FOUND. Do not repeat searches.`;
