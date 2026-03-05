@@ -139,9 +139,10 @@ class GameState {
         return departed;
     }
 
-    /** Returns the number of active (non-departed, non-dead) patrons currently in the inn. */
+    /** Returns the number of active (non-departed, non-dead) patrons currently in the inn or questing. */
     getActivePatronCount(): number {
-        return this.patrons.size;
+        return Array.from(this.patrons.values())
+            .filter(p => p.state !== 'DEPARTED' && p.state !== 'DEAD').length;
     }
 
     // ── Quests ──────────────────────────────────────────────────────────
@@ -414,12 +415,12 @@ class GameState {
         completedQuests: number;
         failedQuests: number;
     } {
-        const patrons = this.getAllPatrons();
+        const activePatrons = this.getAllPatrons().filter(p => p.state !== 'DEPARTED' && p.state !== 'DEAD');
         const quests = this.getAllQuests();
         return {
-            totalPatrons: patrons.length,
-            idlePatrons: patrons.filter(p => p.state === 'IDLE' || p.state === 'LOUNGING').length,
-            onQuestPatrons: patrons.filter(p => p.state === 'ON_QUEST').length,
+            totalPatrons: activePatrons.length,
+            idlePatrons: activePatrons.filter(p => p.state === 'IDLE' || p.state === 'LOUNGING').length,
+            onQuestPatrons: activePatrons.filter(p => p.state === 'ON_QUEST').length,
             totalQuests: quests.length,
             postedQuests: quests.filter(q => q.status === 'POSTED').length,
             acceptedQuests: quests.filter(q => q.status === 'ACCEPTED').length,

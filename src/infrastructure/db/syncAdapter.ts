@@ -41,7 +41,7 @@ class DBSyncAdapter {
             }
 
             // 2. Patrons
-            const patrons = await db.fetchAllPatrons();
+            const patrons = await db.fetchActivePatrons();
             for (const p of patrons) {
                 // We use addPatron which emits the event, but we block the DB write
                 gameState.addPatron(p);

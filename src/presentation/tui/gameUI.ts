@@ -221,7 +221,7 @@ async function postQuest(rl: readline.Interface): Promise<void> {
 }
 
 async function viewPatrons(rl: readline.Interface): Promise<void> {
-    const patrons = gameState.getAllPatrons();
+    const patrons = gameState.getAllPatrons().filter(p => p.state !== 'DEPARTED' && p.state !== 'DEAD');
     if (patrons.length === 0) {
         console.log(`\n  ${C.dim}The inn is empty. Summon patrons first (8 or I).${C.reset}`);
         return;

@@ -181,7 +181,9 @@ class DayEngine {
         if (!isDBEnabled) return null;
 
         try {
-            const activeNames = gameState.getAllPatrons().map(p => p.name);
+            const activeNames = gameState.getAllPatrons()
+                .filter(p => p.state !== 'DEPARTED' && p.state !== 'DEAD')
+                .map(p => p.name);
             const recurring = await db.fetchRandomRecurringPatron(activeNames);
             if (!recurring) return null;
 

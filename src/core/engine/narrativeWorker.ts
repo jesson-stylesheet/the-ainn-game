@@ -33,6 +33,13 @@ class NarrativeWorker {
                     actualPatron.healthStatus = resolution.patron_health;
                     if (resolution.patron_health === 'DEAD') {
                         actualPatron.state = 'DEAD';
+                        // Unequip all items back to the Inn Vault
+                        for (const slotKey in actualPatron.equipment) {
+                            const slot = slotKey as Extract<keyof typeof actualPatron.equipment, string>;
+                            if (actualPatron.equipment[slot]) {
+                                gameState.unequipItem(actualPatron.id, slot as any);
+                            }
+                        }
                     } else {
                         // Release from AWAITING_NARRATIVE
                         actualPatron.state = result.success ? 'LOUNGING' : 'IDLE';

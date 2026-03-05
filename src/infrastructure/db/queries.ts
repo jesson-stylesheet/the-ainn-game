@@ -323,9 +323,11 @@ export async function updatePatronHealth(id: string, healthStatus: IPatron['heal
     if (error) throw new Error(`Failed to update patron health: ${error.message}`);
 }
 
-export async function fetchAllPatrons(): Promise<IPatron[]> {
-    const { data, error } = await supabase.from('patrons').select('*').eq('inn_id', gameState.innId);
-    if (error) throw new Error(`Failed to fetch patrons: ${error.message}`);
+export async function fetchActivePatrons(): Promise<IPatron[]> {
+    const { data, error } = await supabase.from('patrons').select('*')
+        .eq('inn_id', gameState.innId)
+        .in('state', ['IDLE', 'LOUNGING', 'ON_QUEST', 'AWAITING_NARRATIVE']);
+    if (error) throw new Error(`Failed to fetch active patrons: ${error.message}`);
     return (data as PatronRow[]).map(rowToPatron);
 }
 
