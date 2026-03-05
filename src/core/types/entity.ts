@@ -71,6 +71,7 @@ export interface IItem {
     location: ItemLocation;  // Where this item currently lives
     sourceQuestId?: string | null; // Quest that produced this item
     craftedByPatronId?: string | null; // If crafted, who crafted it
+    quality?: number | null; // ONLY for crafted items: probability score (0-100) = crafting quality
 }
 
 export type PatronEquipment = Record<EquipmentSlot, IItem | null>;

@@ -36,6 +36,14 @@ Based on the quest outcome and probability:
 
 IMPORTANT: Death should occur less than 5% of the time. Most failures result in INJURED. Success always results in HEALTHY.
 
+## CRAFTING QUESTS
+Crafting quests ALWAYS succeed — the patron completed the item. The CRAFTING QUALITY score (0-100) determines the narrative flavor:
+- 90-100 (MASTERWORK): Describe a legendary piece of artisanship. The item practically glows with perfection. The Inn's reputation rises.
+- 70-89 (EXCEPTIONAL): Fine craftsmanship, elegant details, a prized possession.
+- 30-69 (STANDARD): Competent work, functional and reliable but nothing extraordinary.
+- 0-29 (SHODDY): Crude, ugly, barely holds together — but it works. Describe visible imperfections.
+For crafting, patron_health is ALWAYS "HEALTHY" — crafting cannot injure or kill.
+
 ## TOOL BUDGET
 You have access to World Codex tools but a strict budget of 8 tool calls maximum. Search each entity only once. Do not repeat a search you have already made.`;
 

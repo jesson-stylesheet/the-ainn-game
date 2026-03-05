@@ -97,6 +97,14 @@ export function computeEquipmentBonus(patron: IPatron, quest: IQuest): number {
         const item: IItem = slot;
         const mappedSkills = synergyMap[item.category] || [];
 
+        // Quality multiplier: crafted items use their quality score,
+        // found/retrieved items default to 50 (baseline).
+        const effectiveQuality = item.quality ?? 50;
+        let qualityMultiplier = 1.0;
+        if (effectiveQuality >= 90) qualityMultiplier = 2.0;  // Masterwork
+        else if (effectiveQuality >= 70) qualityMultiplier = 1.5;  // Exceptional
+        else if (effectiveQuality < 30) qualityMultiplier = 0.5;  // Shoddy
+
         let hasSynergy = false;
         for (const skill of mappedSkills) {
             if (quest.requirements[skill] > 0) {
@@ -106,10 +114,10 @@ export function computeEquipmentBonus(patron: IPatron, quest: IQuest): number {
         }
 
         if (hasSynergy) {
-            bonus += item.rarity / 10;
+            bonus += (item.rarity / 10) * qualityMultiplier;
         } else if (isCombat && mappedSkills.length > 0) {
             // Apply flat bonus if it's armor/weapon during combat, with no specific synergy
-            bonus += item.rarity / 25;
+            bonus += (item.rarity / 25) * qualityMultiplier;
         }
     }
 

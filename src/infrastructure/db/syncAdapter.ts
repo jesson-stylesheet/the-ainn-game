@@ -184,9 +184,18 @@ class DBSyncAdapter {
 
         // Items
         eventBus.on('item:added', ({ item }) => {
-            if (!isDBEnabled()) return;
+            if (!isDBEnabled()) {
+                console.warn(`[DBSync] item:added fired but DB is disabled — skipping insert for ${item.name}`);
+                return;
+            }
             this.dbQueue.push(async () => {
-                await db.insertItem(item);
+                try {
+                    console.log(`[DBSync] Inserting item into DB: ${item.name} (${item.location})`);
+                    await db.insertItem(item);
+                    console.log(`[DBSync] ✅ Item inserted: ${item.name}`);
+                } catch (e) {
+                    console.error(`[DBSync] ❌ Failed to insert item "${item.name}":`, (e as Error).message);
+                }
             });
         });
 

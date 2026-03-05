@@ -94,6 +94,7 @@ interface ItemRow {
     location: string;
     source_quest_id: string | null;
     crafted_by_patron_id: string | null;
+    quality: number | null;
     created_at: string;
 }
 
@@ -210,6 +211,7 @@ export async function insertItem(item: IItem): Promise<void> {
         location: item.location,
         source_quest_id: item.sourceQuestId ?? null,
         crafted_by_patron_id: item.craftedByPatronId ?? null,
+        quality: item.quality ?? null,
     });
     if (error) throw new Error(`Failed to insert item: ${error.message}`);
 }
@@ -287,6 +289,7 @@ function rowToItem(row: ItemRow): IItem {
         location: row.location as ItemLocation,
         sourceQuestId: row.source_quest_id,
         craftedByPatronId: row.crafted_by_patron_id,
+        quality: row.quality ?? null,
     };
 }
 

@@ -272,37 +272,56 @@ class GameState {
 
     /**
      * Record a resolution result and update state accordingly.
+     * NOTE: Crafting quests ALWAYS succeed (ingredients already consumed on assignment).
+     *       Their probability score (P) becomes the crafted item's QUALITY.
      */
     recordResolution(result: QuestResolutionResult): void {
         const quest = this.quests.get(result.questId);
         const patron = this.patrons.get(result.patronId);
 
         if (quest) {
-            quest.status = result.success ? 'COMPLETED' : 'FAILED';
+            // Crafting is always a success — ingredients are already burned in.
+            // P becomes the item's quality score (0–100).
+            const isCrafting = quest.type === 'crafting';
+            const effectiveSuccess = isCrafting ? true : result.success;
+
+            quest.status = effectiveSuccess ? 'COMPLETED' : 'FAILED';
 
             // Gain reputation on successful subjugation
-            if (result.success && quest.type === 'subjugation') {
+            if (effectiveSuccess && quest.type === 'subjugation') {
                 const repGain = Math.max(1, Math.floor(quest.difficultyScalar / 5));
                 this._reputation += repGain;
                 eventBus.emit('inn:reputation_gained', { amount: repGain, total: this._reputation });
             }
 
             // Deposit extracted or crafted items into the Inn's ledger on success
-            if (result.success && (quest.type === 'itemRetrieval' || quest.type === 'crafting') && quest.itemDetails) {
+            if (effectiveSuccess && (quest.type === 'itemRetrieval' || quest.type === 'crafting') && quest.itemDetails) {
                 const newItem: IItem = {
                     id: generateUUID(),
                     name: quest.itemDetails.itemName,
                     category: quest.itemDetails.category,
-                    // Legacy Note: Was 'resolutionTicks'. Now 'durationDays'.
                     rarity: quest.itemDetails.rarity,
                     quantity: quest.itemDetails.quantity,
                     ownerPatronId: null,
                     equippedSlot: null,
                     location: 'INN_VAULT',
                     sourceQuestId: quest.id,
-                    craftedByPatronId: quest.type === 'crafting' ? result.patronId : null,
+                    craftedByPatronId: isCrafting ? result.patronId : null,
+                    // P(success) score becomes quality for crafted items (0-100 scale)
+                    quality: isCrafting ? Math.round(result.probability * 100) : null,
                 };
                 this.addItem(newItem);
+                if (isCrafting) {
+                    const quality = newItem.quality ?? 0;
+                    console.log(`[GameState] ⚒ Crafted "${newItem.name}" with quality ${quality}/100 by patron ${result.patronId}`);
+
+                    // Masterwork Reputation Bonus
+                    if (quality >= 90) {
+                        this._reputation += 2;
+                        eventBus.emit('inn:reputation_gained', { amount: 2, total: this._reputation });
+                        console.log(`[GameState] ✨ MASTERWORK! "${newItem.name}" earns the Inn +2 Reputation.`);
+                    }
+                }
             }
         }
 

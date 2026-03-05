@@ -47,7 +47,11 @@ MATH:
 - P(Success): ${(result.probability * 100).toFixed(1)}%
 - Fate: ${result.rawRoll.toFixed(3)} ${result.success ? '≤' : '>'} ${result.probability.toFixed(3)}
 - Weak Skills: ${result.weakestTags.length > 0 ? result.weakestTags.join(', ') : 'None (Perfectly Qualified)'}
-- Top Patron Skills: ${getTopSkills(patron, 4)}`;
+- Top Patron Skills: ${getTopSkills(patron, 4)}${quest.type === 'crafting' ? `\n\nCRAFTING QUALITY: ${Math.round(result.probability * 100)}/100 (${result.probability >= 0.9 ? 'MASTERWORK — legendary, describe the item as a masterpiece' :
+                result.probability >= 0.7 ? 'EXCEPTIONAL — high quality, describe fine craftsmanship' :
+                    result.probability >= 0.3 ? 'STANDARD — functional, describe competent work' :
+                        'SHODDY — crude but functional, describe imperfections and flaws'
+            })` : ''}`;
 
     try {
         return await chatCompletionStructured<ResolutionNarrative>(
