@@ -12,7 +12,7 @@ import { ALL_SKILL_TAGS } from '../../core/types/entity';
 import { loreChronicle } from '../../core/engine/loreChronicle';
 import { gameState } from '../../core/engine/gameState';
 import { CODEX_SEARCH_TOOLS, CODEX_FULL_TOOLS, CODEX_HANDLERS } from './codexTools';
-import { searchCodexMobSemantic, searchCodexItemSemantic, searchCodexFactionSemantic } from '../db/queries';
+import { searchCodexMobSemantic, searchCodexItemSemantic, searchCodexFactionSemantic, fetchRandomCodexItems } from '../db/queries';
 
 // ── Centralized imports ────────────────────────────────────────────────
 import { RESOLUTION_SYSTEM_PROMPT, getQuestParserSystemPrompt, ARRIVAL_SYSTEM_PROMPT, ITEM_DEDUP_SYSTEM_PROMPT, PATRON_QUEST_GEN_SYSTEM_PROMPT, GUARDIAN_QUESTION_PROMPT, GUARDIAN_SYNTHESIS_PROMPT, CODEX_SYNC_SYSTEM_PROMPT } from './prompts/systemPrompts';
@@ -48,9 +48,9 @@ MATH:
 - Fate: ${result.rawRoll.toFixed(3)} ${result.success ? '≤' : '>'} ${result.probability.toFixed(3)}
 - Weak Skills: ${result.weakestTags.length > 0 ? result.weakestTags.join(', ') : 'None (Perfectly Qualified)'}
 - Top Patron Skills: ${getTopSkills(patron, 4)}${quest.type === 'crafting' ? `\n\nCRAFTING QUALITY: ${Math.round(result.probability * 100)}/100 (${result.probability >= 0.9 ? 'MASTERWORK — legendary, describe the item as a masterpiece' :
-                result.probability >= 0.7 ? 'EXCEPTIONAL — high quality, describe fine craftsmanship' :
-                    result.probability >= 0.3 ? 'STANDARD — functional, describe competent work' :
-                        'SHODDY — crude but functional, describe imperfections and flaws'
+            result.probability >= 0.7 ? 'EXCEPTIONAL — high quality, describe fine craftsmanship' :
+                result.probability >= 0.3 ? 'STANDARD — functional, describe competent work' :
+                    'SHODDY — crude but functional, describe imperfections and flaws'
             })` : ''}`;
 
     try {
@@ -165,11 +165,16 @@ export async function generatePatronQuest(
         // Perform RAG lookups based on the patron's archetype and top skills
         const ragQuery = `${patron.archetype} preparing for work involving ${topSkills}`;
 
-        const [mobs, items, factions] = await Promise.all([
+        let [mobs, items, factions] = await Promise.all([
             searchCodexMobSemantic(ragQuery, 0.4, 2),
             searchCodexItemSemantic(ragQuery, 0.4, 2),
             searchCodexFactionSemantic(ragQuery, 0.4, 1)
         ]);
+
+        if (items.length === 0) {
+            // Fallback: If no semantic matches, grab random items so LLM has vocabulary
+            items = await fetchRandomCodexItems(2);
+        }
 
         if (mobs.length > 0) codexContext += `\nKNOWN MOBS (Threats, bounties):\n` + mobs.map(m => `- ${m.name}: ${m.description} (Danger: ${m.dangerLevel})`).join('\n');
         if (items.length > 0) codexContext += `\nKNOWN ITEMS (Relics, loot, materials):\n` + items.map(i => `- ${i.name}: ${i.description} (Rarity: ${i.rarity})`).join('\n');

@@ -18,6 +18,7 @@ import { DEFAULT_QUEST_DEADLINE_DAYS } from '../../core/constants';
 import { generateUUID } from '../../core/engine/utils';
 import { parseQuestText as mockParseQuestText } from '../../core/engine/questFactory';
 import { gameState } from '../../core/engine/gameState';
+import { searchCodexItemSemantic, insertCodexItem } from '../db/queries';
 
 // Valid quest types for validation
 const VALID_QUEST_TYPES: QuestType[] = ['diplomacy', 'itemRetrieval', 'subjugation', 'crafting'];
@@ -95,19 +96,39 @@ export async function parseQuestWithLLM(text: string, innReputation: number = 0)
         let consumedItems: IQuest['consumedItems'] = undefined;
 
         if ((questType === 'itemRetrieval' || questType === 'crafting') && response.itemDetails) {
-            const rarity = Math.max(0, Math.min(100, response.itemDetails.rarity ?? 0));
+            let rarity = Math.max(0, Math.min(100, response.itemDetails.rarity ?? 0));
             const quantity = Math.max(1, Math.round(response.itemDetails.quantity ?? 1));
             let itemName = response.itemDetails.itemName || 'unknown item';
-            const category = response.itemDetails.category || 'questItem';
+            let category = response.itemDetails.category || 'questItem';
 
-            // ── Item Deduplication ──────────────────────────────────────
-            // Check existing inventory for semantic duplicates
+            // ── Item Deduplication against Inventory ────────────────────
             const existingItems = gameState.getInnInventory().map(i => i.name);
             const dedup = await deduplicateItemName(itemName, existingItems);
             if (dedup.wasDeduped) {
                 console.log(`  🔗 Dedup: "${itemName}" → "${dedup.canonicalName}" (${dedup.reasoning})`);
+                itemName = dedup.canonicalName;
             }
-            itemName = dedup.canonicalName;
+
+            // ── Codex Strict Verification ────────────────────────AAAAA────
+            // Ensure the item exists in the Canon World Codex
+            const canonMatches = await searchCodexItemSemantic(itemName, 0.6, 1);
+
+            if (canonMatches.length > 0) {
+                const canon = canonMatches[0];
+                console.log(`  📖 Codex Match: "${itemName}" aligned to canon "${canon.name}"`);
+                itemName = canon.name;
+                category = canon.category;
+                rarity = canon.rarity;
+            } else {
+                console.log(`  ➕ Codex Auto-Register: Hallucinated item "${itemName}" added to canon.`);
+                const newItem = await insertCodexItem({
+                    name: itemName,
+                    description: `A ${category} requested or crafted during a quest by a patron.`,
+                    category: category,
+                    rarity: rarity
+                });
+                itemName = newItem.name;
+            }
 
             itemDetails = { itemName, category, quantity, rarity };
 

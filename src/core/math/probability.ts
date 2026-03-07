@@ -187,7 +187,8 @@ export function resolveQuest(patron: IPatron, quest: IQuest): QuestResolutionRes
 
     // Fate roll
     const rawRoll = Math.random();
-    const success = rawRoll <= probability;
+    // Crafting ALWAYS succeeds. The probability score dictates the quality of the item.
+    const success = quest.type === 'crafting' ? true : rawRoll <= probability;
 
     // Extract tags that caused the highest negative impact
     const weakestTags = extractWeakestTags(patron.skills, quest.requirements);

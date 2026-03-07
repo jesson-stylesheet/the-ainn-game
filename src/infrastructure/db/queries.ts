@@ -790,6 +790,25 @@ export async function searchCodexItemSemantic(query: string, matchThreshold: num
     }));
 }
 
+export async function fetchRandomCodexItems(limitCount: number = 3): Promise<ICodexItem[]> {
+    const { data, error } = await supabase
+        .from('codex_items')
+        .select('*')
+        .eq('world_id', gameState.worldId)
+        .limit(50); // Fetch a pool of recent or arbitrary items to pick from
+
+    if (error) throw new Error(`Failed to fetch random codex items: ${error.message}`);
+    if (!data || data.length === 0) return [];
+
+    // Shuffle and pick
+    const shuffled = [...data].sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, limitCount);
+
+    return selected.map(row => ({
+        id: row.id, name: row.name, description: row.description, category: row.category as ItemCategory, rarity: row.rarity, discoveredAt: row.discovered_at
+    }));
+}
+
 export async function insertCodexCharacter(character: ICodexCharacter): Promise<ICodexCharacter> {
     const cleanName = sanitizeName(character.name);
 

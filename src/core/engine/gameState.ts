@@ -283,19 +283,18 @@ class GameState {
             // Crafting is always a success — ingredients are already burned in.
             // P becomes the item's quality score (0–100).
             const isCrafting = quest.type === 'crafting';
-            const effectiveSuccess = isCrafting ? true : result.success;
 
-            quest.status = effectiveSuccess ? 'COMPLETED' : 'FAILED';
+            quest.status = result.success ? 'COMPLETED' : 'FAILED';
 
             // Gain reputation on successful subjugation
-            if (effectiveSuccess && quest.type === 'subjugation') {
+            if (result.success && quest.type === 'subjugation') {
                 const repGain = Math.max(1, Math.floor(quest.difficultyScalar / 5));
                 this._reputation += repGain;
                 eventBus.emit('inn:reputation_gained', { amount: repGain, total: this._reputation });
             }
 
             // Deposit extracted or crafted items into the Inn's ledger on success
-            if (effectiveSuccess && (quest.type === 'itemRetrieval' || quest.type === 'crafting') && quest.itemDetails) {
+            if (result.success && (quest.type === 'itemRetrieval' || quest.type === 'crafting') && quest.itemDetails) {
                 const newItem: IItem = {
                     id: generateUUID(),
                     name: quest.itemDetails.itemName,
